@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% set labels = {'draft':'Draft','sent':'Sent','viewed':'Opened','in_progress':'In progress','completed':'Signed','expired':'Expired','voided':'Cancelled'} %}
+{% set ev = {'created':'Packet created','sent':'Sent','viewed':'Opened by client','signed':'Signed','completed':'Completed','voided':'Cancelled','extended':'Link extended','reminder':'Reminder','receipt_emailed':'Confirmation emailed','email_failed':'Email failed','details':'Details updated','followup':'Follow-up','downloaded':'Downloaded by client','confirmed':'Confirmed receipt'} %}
+{% block title %}{{ p.client_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><a href="{{ url_for('dashboard') }}" class="small">← Packets</a>
+    <div class="row"><h1>{{ p.client_name }}</h1><span class="stamp s-{{ state }}">{{ labels[state] }}</span></div>
+    <p class="muted">{{ p.client_email }} · <span class="mono">{{ packet_ref(p) }}</span>{% if p.so_number %} · <strong>SO# {{ p.so_number }}</strong>{% endif %}{% if p.sales_rep %} · Rep: {{ p.sales_rep }}{% endif %}</p></div>
+  <div class="row">
+    <a class="btn" href="{{ url_for('admin_audit_pdf', pid=p.id) }}">Audit trail PDF</a>
+  </div>
+</div>
+
+{% if deadline.overdue %}
+<div class="flash flash-overdue">Not completed within {{ sign_hours }} hours: sent {{ p.sent_at|when }}, {{ deadline.label|lower }}. Follow up with {{ p.client_name }} and record it below.</div>
+{% elif deadline.due_at %}
+<div class="flash flash-due">Client target: complete by {{ deadline.due_at|when }} ({{ deadline.label|lower }}).</div>
+{% endif %}
+{% if state not in ('completed','voided') %}
+<section class="panel">
+  <div class="panel-head"><h2>Signing link</h2><span class="muted small">Valid until {{ p.expires_at|day }}</span></div>
+  <p class="muted small">Send this to {{ p.client_name }} by email or text. Anyone with the link can sign, so send it only to your client.</p>
+  <div class="linkbox"><input id="signing-link" type="text" readonly value="{{ link }}" aria-label="Signing link">
+    <button class="btn btn-primary" type="button" id="copy-link">Copy link</button>
+    <a class="btn btn-quiet" href="{{ link }}" target="_blank" rel="noopener">Preview as client</a></div>
+  <div class="row">
+    {% if email_enabled %}
+    <form method="post" action="{{ url_for('email_packet', pid=p.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn">{{ 'Send reminder email' if p.sent_at else 'Email to client' }}</button></form>
+    {% endif %}
+    <form method="post" action="{{ url_for('extend_packet', pid=p.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn btn-quiet">Extend link</button></form>
+    <form method="post" action="{{ url_for('void_packet', pid=p.id) }}" data-confirm="Cancel this packet? The link will stop working and can't be reopened."><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn btn-quiet btn-danger">Cancel packet</button></form>
+  </div>
+</section>
+{% elif state=='completed' %}
+<div class="flash flash-ok">Confirmed: {{ p.client_name }} signed all {{ total }} item{{ 's' if total!=1 }} on {{ p.completed_at|when }}.</div>
+{% endif %}
+
+<div class="detail-grid">
+  <div class="stack">
+  <section class="panel">
+    <div class="panel-head"><h2>Forms and files</h2><span class="muted small">{{ signed }} of {{ total }} signed</span></div>
+    <div class="doc-list">
+    {% for it in items %}
+      <div class="doc-row">
+        <div class="doc-main"><strong>{{ it.template_name }}{% if it.adhoc %} <span class="tag">One-off</span>{% endif %}</strong>
+          {% if not it.requires_signature %}<span class="small muted">{{ it.file_name|filetype if it.template_kind in ('pdf','file') and it.file_name else {'pdf':'PDF document','file':'File','form':'Fillable form'}[it.template_kind] }} · for the client's records · {{ 'downloaded ' ~ (it.downloaded_at|when) if it.downloaded_at else 'not downloaded yet' }}</span>
+          {% elif it.signed_at %}<span class="small muted">Signed by {{ it.signer_name }} · {{ it.signed_at|when }}</span>
+          {% else %}<span class="small muted">{{ it.file_name|filetype if it.template_kind in ('pdf','file') and it.file_name else {'pdf':'PDF document','file':'File','form':'Fillable form'}[it.template_kind] }} · not signed yet</span>{% endif %}
+        </div>
+        {% if it.template_file and it.template_kind in ('pdf','file') %}<a class="btn btn-quiet" href="{{ url_for('admin_original', pid=p.id, iid=it.id) }}">Original</a>{% endif %}
+        {% if not it.requires_signature %}<span class="stamp s-{{ 'completed' if it.downloaded_at else 'sent' }}">{{ 'Received' if it.downloaded_at else 'To review' }}</span>
+        {% elif it.signed_at %}<span class="stamp s-completed">Signed</span>
+          <a class="btn" href="{{ url_for('admin_signed_pdf', pid=p.id, iid=it.id) }}">Signed PDF</a>
+        {% else %}<span class="stamp s-{{ 'viewed' if p.first_viewed_at else 'sent' }}">Waiting</span>{% endif %}
+      </div>
+    {% endfor %}
+    </div>
+    {% if p.message %}<div class="stack" style="gap:4px"><span class="eyebrow">Your note</span><p style="white-space:pre-wrap">{{ p.message }}</p></div>{% endif %}
+  </section>
+
+  <section class="panel followups" id="followups">
+    <div class="panel-head"><h2>Follow-ups &amp; notes</h2>
+      {% set done_n = followups|selectattr('done')|list|length %}<span class="muted small">{{ done_n }} of {{ followups|length }} follow-ups done</span></div>
+    <form method="post" action="{{ url_for('save_followups', pid=p.id) }}" class="stack" style="gap:10px">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <ol class="fu-list">
+      {% for f in followups %}
+        <li class="fu-row {{ 'done' if f.done }}">
+          <label class="check fu-check" for="fu_done_{{ loop.index0 }}"><input type="checkbox" id="fu_done_{{ loop.index0 }}" name="fu_done_{{ loop.index0 }}" {{ 'checked' if f.done }}>
+            <span><strong>Follow-up {{ loop.index }}</strong><br><span class="small muted fu-meta">{% if f.done %}{{ f.at|when }}{% if f.by %} · {{ f.by }}{% endif %}{% else %}Not done{% endif %}</span></span></label>
+          <input type="text" name="fu_note_{{ loop.index0 }}" value="{{ f.note }}" maxlength="500" placeholder="e.g. Called, left voicemail / Client will sign tonight" aria-label="Note for follow-up {{ loop.index }}">
+        </li>
+      {% endfor %}
+      </ol>
+      <label for="notes">Notes <span class="hint">Anything else about this packet, visible to the team only</span>
+        <textarea id="notes" name="notes" rows="3">{{ p.notes or '' }}</textarea></label>
+      <div><button class="btn btn-primary">Save follow-ups</button></div>
+    </form>
+  </section>
+  </div>
+
+  <aside class="stack">
+    <section class="panel">
+      <h2>Details</h2>
+      <form method="post" action="{{ url_for('update_packet_details', pid=p.id) }}" class="stack" style="gap:10px">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <div class="grid-2" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
+          <label for="so_number" class="small">SO#<input id="so_number" type="text" name="so_number" value="{{ p.so_number or '' }}"></label>
+          <label for="sales_rep" class="small">Sales rep<input id="sales_rep" type="text" name="sales_rep" value="{{ p.sales_rep or '' }}" list="rep-list"></label>
+        </div><datalist id="rep-list">{% for r in sales_reps() %}<option value="{{ r }}">{% endfor %}</datalist>
+        <div><button class="btn btn-quiet small">Save</button></div>
+      </form>
+      <dl class="meta">
+        <dt>Created</dt><dd>{{ p.created_at|when }}{% if p.created_by %} · {{ p.created_by }}{% endif %}</dd>
+        <dt>Sent</dt><dd>{{ p.sent_at|when }}</dd>
+        <dt>Opened</dt><dd>{{ p.first_viewed_at|when }}</dd>
+        <dt>Completed</dt><dd>{{ p.completed_at|when }}</dd>
+      </dl>
+    </section>
+    <section class="panel">
+      <h2>Activity</h2>
+      <ol class="timeline">
+      {% for e in events %}
+        <li class="ev-{{ e.type }}"><div><strong style="font-weight:600">{{ ev.get(e.type, e.type) }}</strong>{% if e.detail and e.type!='viewed' %} <span class="muted">· {{ e.detail }}</span>{% endif %}
+          <div class="small muted">{{ e.at|when }}{% if e.ip and e.type in ('viewed','signed') %} · {{ e.ip }}{% endif %}</div></div></li>
+      {% endfor %}
+      </ol>
+    </section>
+  </aside>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const btn=document.getElementById('copy-link');
+if(btn){btn.addEventListener('click',async()=>{const i=document.getElementById('signing-link');
+  try{await navigator.clipboard.writeText(i.value);btn.textContent='Copied';}catch(e){i.select();document.execCommand('copy');btn.textContent='Copied';}
+  setTimeout(()=>btn.textContent='Copy link',1800);});}
+</script>
+<script src="{{ url_for('static', filename='confirm.js') }}"></script>
+{% endblock %}

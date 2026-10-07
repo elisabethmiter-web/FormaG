@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit ' ~ form.name if form else 'New fillable form' }}{% endblock %}
+{% block wrapclass %}narrow{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><a href="{{ url_for('library') }}" class="small">← Form library</a>
+  <h1>{{ 'Edit form' if form else 'Build a fillable form' }}</h1>
+  <p class="muted">{{ 'Changes apply to packets you send from now on.' if form else 'Your client fills in these fields and signs at the end. Good for intake questionnaires, authorizations and acknowledgements.' }}</p></div>
+</div>
+<form method="post" class="panel" id="builder-form">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <input type="hidden" name="fields_json" id="fields_json" value="{{ fields_json }}">
+  <label for="name">Form name<input id="name" type="text" name="name" value="{{ name }}" required placeholder="e.g. New client intake"></label>
+  {% if not form or form.kind=='form' %}
+  <label for="body">Text shown above the fields <span class="hint">Instructions, terms, or the statement the client is agreeing to. Leave a blank line between paragraphs.</span>
+    <textarea id="body" name="body" rows="6">{{ body }}</textarea></label>
+  {% else %}
+  <input type="hidden" name="body" value="">
+  <p class="muted small">PDF: <a href="{{ url_for('template_file', tid=form.id) }}" target="_blank">view the uploaded file</a>. To replace the PDF, upload a new form and remove this one.</p>
+  {% endif %}
+  <div class="stack" style="gap:8px">
+    <h3>Fields</h3>
+    <div class="builder-list" id="builder"></div>
+    <div><button type="button" class="btn" id="add-field">Add field</button></div>
+  </div>
+  <div class="row"><button class="btn btn-primary">Save form</button><a class="btn btn-quiet" href="{{ url_for('library') }}">Cancel</a></div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='builder.js') }}"></script>
+<script>
+  const initial = JSON.parse(document.getElementById('fields_json').value || '[]');
+  FormBuilder.mount(document.getElementById('builder'), document.getElementById('add-field'), document.getElementById('fields_json'),
+    initial.length || {{ 'true' if form else 'false' }} ? initial : [{label:'Full legal name',type:'text',required:true},{label:'Date of birth',type:'date',required:false},{label:'I confirm the information above is accurate',type:'checkbox',required:true}]);
+</script>
+{% endblock %}

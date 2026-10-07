@@ -1,0 +1,16 @@
+{# On-page document viewer: page images rendered on the server, an image, an HTML preview, or a download #}
+{% if viewer.mode == 'pages' %}
+  <div class="doc-pages" aria-label="{{ it.template_name }}, {{ viewer.count }} page{{ 's' if viewer.count != 1 }}">
+  {% for n in range(viewer.count) %}
+    <a href="{{ url_for('client_page', token=p.token, iid=it.id, n=n) }}" target="_blank" rel="noopener" title="Open page {{ n + 1 }} full size"><img src="{{ url_for('client_page', token=p.token, iid=it.id, n=n) }}" alt="Page {{ n + 1 }} of {{ viewer.count }}" loading="{{ 'eager' if n < 2 else 'lazy' }}"></a>
+  {% endfor %}
+  <p class="muted small doc-end">Tap a page to zoom · End of document · {{ viewer.count }} page{{ 's' if viewer.count != 1 }}</p>
+  </div>
+{% elif viewer.mode == 'image' %}
+  <a href="{{ url_for('client_doc', token=p.token, iid=it.id) }}" target="_blank" rel="noopener"><img class="file-preview" src="{{ url_for('client_doc', token=p.token, iid=it.id) }}" alt="{{ it.file_name }}"></a>
+{% elif viewer.mode == 'html' %}
+  <div class="doc-html">{{ viewer.html|safe }}</div>
+  <p class="muted small">Simplified preview. Download the file to see the original formatting.</p>
+{% else %}
+  <p class="muted small">This type of file can't be shown here. Download it to review, then sign below.</p>
+{% endif %}

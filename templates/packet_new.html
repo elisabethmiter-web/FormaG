@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}New packet{% endblock %}
+{% block wrapclass %}narrow{% endblock %}
+{% block content %}
+<div class="page-head"><div><a href="{{ url_for('dashboard') }}" class="small">← Packets</a><h1>New signing packet</h1>
+<p class="muted">Pick saved forms and add one-off files. The client goes through them in order.</p></div></div>
+<form method="post" class="panel" id="packet-form" enctype="multipart/form-data">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <div class="grid-2">
+    <label for="client_name">Client name<input id="client_name" type="text" name="client_name" value="{{ form.get('client_name','') }}" required></label>
+    <label for="client_email">Client email<input id="client_email" type="email" name="client_email" value="{{ form.get('client_email','') }}" required></label>
+    <label for="so_number">SO# <span class="hint">Sales order number</span><input id="so_number" type="text" name="so_number" value="{{ form.get('so_number','') }}" placeholder="e.g. SO-10482" autocomplete="off"></label>
+    <label for="sales_rep">Sales rep<input id="sales_rep" type="text" name="sales_rep" value="{{ form.get('sales_rep', current_user.name if current_user and current_user.id else '') }}" list="rep-list" autocomplete="off" placeholder="Start typing a name"></label>
+    <datalist id="rep-list">{% for r in sales_reps() %}<option value="{{ r }}">{% endfor %}</datalist>
+  </div>
+  <fieldset class="stack" style="border:0;padding:0;margin:0;gap:8px">
+    <legend style="font-weight:500;margin-bottom:8px">Forms to include</legend>
+    <div class="picker" id="picker">
+    {% if not templates %}<p class="muted small">Your library is empty. <a href="{{ url_for('library') }}">Add forms you reuse</a>, or use one-off files below.</p>{% endif %}
+    {% for t in templates %}
+      <label class="pick"><input type="checkbox" name="template_ids" value="{{ t.id }}" {{ 'checked' if t.id in selected }}>
+        <span><strong style="font-weight:600">{{ t.name }}</strong><br><span class="muted small">{{ t.file_name|filetype if t.kind in ('pdf','file') and t.file_name else {'pdf':'PDF document','file':'File','form':'Fillable form'}[t.kind] }}</span></span>
+        <span class="order"></span></label>
+    {% endfor %}
+    </div>
+  </fieldset>
+  <div class="stack adhoc" style="gap:8px">
+    <div class="stack" style="gap:2px"><strong style="font-weight:500">One-off files <span class="hint">Optional</span></strong>
+      <span class="muted small">Files just for this client: quotes, contracts, photos, spreadsheets, any type. They're sent with this packet only and not saved to your library. Up to 50 MB in total.</span></div>
+    <label class="dropzone" for="adhoc_files" id="adhoc-drop">
+      <span><strong>Drop files here</strong> or click to choose</span>
+      <input id="adhoc_files" type="file" name="adhoc_files" multiple>
+    </label>
+    <div id="adhoc-list" class="adhoc-list"></div>
+  </div>
+  <label for="message">Note to your client <span class="hint">Optional. Shown on the signing page{{ ' and in the email' if email_enabled }}.</span>
+    <textarea id="message" name="message" rows="3" placeholder="Hi Sam, here are the onboarding documents we discussed.">{{ form.get('message','') }}</textarea></label>
+  <label for="expiry_days" style="max-width:260px">Link expires after
+    <select id="expiry_days" name="expiry_days">{% for d in (7,14,30,60,90) %}<option value="{{ d }}" {{ 'selected' if d==30 }}>{{ d }} days</option>{% endfor %}</select></label>
+  <div class="row">
+    {% if email_enabled %}<button class="btn btn-primary btn-lg" name="action" value="send_email">Email to client</button>
+    <button class="btn btn-lg" name="action" value="link">Create link only</button>
+    {% else %}<button class="btn btn-primary btn-lg" name="action" value="link">Create signing link</button>
+    <span class="muted small">You'll copy the link and send it yourself. Add SMTP settings to email it from here.</span>{% endif %}
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){
+  const inp=document.getElementById('adhoc_files'), list=document.getElementById('adhoc-list'), drop=document.getElementById('adhoc-drop');
+  if(!inp) return;
+  const kb=n=>n>1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB';
+  function paint(){
+    list.innerHTML='';
+    [...inp.files].forEach((f,i)=>{
+      const row=document.createElement('div'); row.className='adhoc-row';
+      row.innerHTML=`<div class="doc-main"><strong></strong><span class="small muted">${kb(f.size)}</span></div>
+        <label class="check small"><input type="checkbox" name="adhoc_sign_${i}" checked> Client signs this</label>`;
+      row.querySelector('strong').textContent=f.name; list.appendChild(row);
+    });
+    if(inp.files.length){const n=document.createElement('p');n.className='muted small';n.textContent='Untick "Client signs this" for files they only need to receive and download.';list.appendChild(n);}
+  }
+  inp.addEventListener('change',paint);
+  ['dragover','dragenter'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add('over');}));
+  ['dragleave','drop'].forEach(t=>drop.addEventListener(t,()=>drop.classList.remove('over')));
+  drop.addEventListener('drop',e=>{e.preventDefault();inp.files=e.dataTransfer.files;paint();});
+})();
+</script>
+<script>
+(function(){
+  const picker=document.getElementById('picker'); if(!picker) return;
+  let order=[...picker.querySelectorAll('input:checked')].map(i=>i.value);
+  function paint(){ picker.querySelectorAll('.pick').forEach(l=>{const i=l.querySelector('input');const n=order.indexOf(i.value);l.querySelector('.order').textContent=n>=0?'#'+(n+1):'';}); }
+  picker.addEventListener('change',e=>{const v=e.target.value; if(e.target.checked) order.push(v); else order=order.filter(x=>x!==v); paint();});
+  document.getElementById('packet-form').addEventListener('submit',e=>{
+    // submit in chosen order
+    const form=e.target; form.querySelectorAll('input[name=template_ids]').forEach(i=>i.disabled=true);
+    order.forEach(v=>{const h=document.createElement('input');h.type='hidden';h.name='template_ids';h.value=v;form.appendChild(h);});
+  });
+  paint();
+})();
+</script>
+{% endblock %}

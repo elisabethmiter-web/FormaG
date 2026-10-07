@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>{% include "_head.html" %}<title>Sign in · {{ business_name }}</title></head>
+<body>
+<main class="login-box">
+  <form class="panel" method="post">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <span class="brand">{% include "_mark.html" %}{{ business_name }}</span>
+    <div class="stack" style="gap:4px"><h1 style="font-size:1.5rem">Sign in</h1><p class="muted small">Manage your forms and signing packets.</p></div>
+    {% if error %}<div class="flash flash-error">{{ error }}</div>{% endif %}
+    <label for="email">Email<input id="email" type="text" name="email" value="{{ email or '' }}" autofocus autocomplete="username" inputmode="email"></label>
+    <label for="password">Password<input id="password" type="password" name="password" autocomplete="current-password"></label>
+    <p class="muted small">Owner: sign in with <strong>admin</strong> and the ADMIN_PASSWORD from your server settings.</p>
+    <button class="btn btn-primary btn-lg">Sign in</button>
+  </form>
+</main>
+</body>
+</html>

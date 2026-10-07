@@ -1,0 +1,87 @@
+{% extends "client_base.html" %}
+{% block title %}{{ it.template_name }}{% endblock %}
+{% block topright %}<a class="small" href="{{ url_for('client_packet', token=p.token) }}">All forms</a>{% endblock %}
+{% block content %}
+<ol class="steps" aria-label="Progress">
+{% for i in items %}<li class="{{ 'done' if i.signed_at else ('current' if i.id==it.id) }}">{{ loop.index }}. {{ i.template_name }}</li>{% endfor %}
+</ol>
+<section class="stack" style="gap:6px">
+  <span class="eyebrow">Form {{ it.position + 1 }} of {{ items|length }}</span>
+  <h1>{{ it.template_name }}</h1>
+</section>
+
+<form method="post" class="stack" id="sign-form" novalidate>
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  {% if it.template_kind=='pdf' %}
+  <section class="panel">
+    <div class="panel-head"><h2>Read the document</h2><a class="small" href="{{ url_for('client_doc', token=p.token, iid=it.id) }}" target="_blank" rel="noopener">Open in a new tab</a></div>
+    {% include "_doc_view.html" %}
+  </section>
+  {% elif it.template_kind=='file' %}
+  <section class="panel">
+    <div class="panel-head"><h2>Review the file</h2></div>
+    {% include "_doc_view.html" %}
+    <div class="file-card">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
+      <div class="doc-main"><strong>{{ it.file_name }}</strong><span class="small muted">{{ it.file_name|filetype }}</span></div>
+      <a class="btn {{ 'btn-quiet' if viewer.mode in ('pages','image','html') else '' }}" href="{{ url_for('client_doc', token=p.token, iid=it.id, download=1) }}">{{ 'Download original' if viewer.mode in ('pages','image','html') else 'Download to review' }}</a>
+    </div>
+    <p class="muted small">{{ 'Read the file above, then sign below.' if viewer.mode in ('pages','image','html') else 'Open the file on your device to read it, then sign below.' }} Your signature is recorded against this exact file.</p>
+  </section>
+  {% elif body %}
+  <section class="panel"><div class="form-body">{{ body }}</div></section>
+  {% endif %}
+
+  {% if fields %}
+  <section class="panel">
+    <h2>{{ 'Your information' if it.template_kind=='form' else 'A few details' }}</h2>
+    {% for f in fields %}
+      <div class="{{ 'has-error' if errors.get(f.id) }}">
+      {% if f.type=='checkbox' %}
+        <label class="check" for="{{ f.id }}"><input type="checkbox" id="{{ f.id }}" name="{{ f.id }}" {{ 'checked' if answers.get(f.id) }} {{ 'required' if f.required }}><span>{{ f.label }}{% if f.required %} <span class="muted">*</span>{% endif %}</span></label>
+      {% else %}
+        <label for="{{ f.id }}"><span>{{ f.label }}{% if f.required %} <span class="muted">*</span>{% endif %}</span>
+        {% if f.type=='textarea' %}<textarea id="{{ f.id }}" name="{{ f.id }}" {{ 'required' if f.required }}>{{ answers.get(f.id,'') }}</textarea>
+        {% else %}<input id="{{ f.id }}" name="{{ f.id }}" value="{{ answers.get(f.id,'') }}" {{ 'required' if f.required }}
+          type="{{ {'email':'email','phone':'tel','date':'date','number':'number'}.get(f.type,'text') }}" {% if f.type=='initials' %}maxlength="6" style="max-width:120px"{% endif %}>{% endif %}
+        </label>
+      {% endif %}
+      {% if errors.get(f.id) %}<span class="field-error">{{ errors[f.id] }}</span>{% endif %}
+      </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <section class="panel">
+    <h2>Sign</h2>
+    <div class="{{ 'has-error' if errors.get('signer_name') }}">
+      <label for="signer_name" style="max-width:420px">Full name<input id="signer_name" type="text" name="signer_name" value="{{ signer_default }}" required autocomplete="name"></label>
+      {% if errors.get('signer_name') %}<span class="field-error">{{ errors.signer_name }}</span>{% endif %}
+    </div>
+    <div class="sig-block">
+      <div class="panel-head">
+        <div class="sig-tabs" role="tablist">
+          <button type="button" role="tab" aria-selected="true" data-mode="draw">Draw</button>
+          <button type="button" role="tab" aria-selected="false" data-mode="type">Type</button>
+        </div>
+        <button type="button" class="btn btn-quiet" id="sig-clear">Clear</button>
+      </div>
+      <div id="sig-draw" class="sig-pad-wrap"><canvas class="sig-pad" id="sig-pad" aria-label="Signature drawing area"></canvas><span class="sig-x">✕</span><div class="sig-line"></div></div>
+      <div id="sig-type" hidden><div class="sig-typed-preview" id="sig-typed"></div><p class="muted small" style="margin-top:6px">Your typed name, in signature style.</p></div>
+      <p class="muted small" id="sig-help">Use your mouse, trackpad or finger to sign in the box.</p>
+      {% if errors.get('signature') %}<span class="field-error">{{ errors.signature }}</span>{% endif %}
+    </div>
+    <input type="hidden" name="signature" id="signature">
+    <div class="{{ 'has-error' if errors.get('consent') }}">
+      <label class="check" for="consent"><input type="checkbox" id="consent" name="consent" required>
+        <span>I agree to sign “{{ it.template_name }}” electronically. My electronic signature is the legal equivalent of my handwritten signature.</span></label>
+      {% if errors.get('consent') %}<span class="field-error">{{ errors.consent }}</span>{% endif %}
+    </div>
+    <div class="row"><button class="btn btn-primary btn-lg" id="submit-btn">Sign{{ ' and continue' if items|selectattr('signed_at','none')|list|length > 1 else ' and finish' }}</button>
+      <span class="muted small" id="submit-msg"></span></div>
+  </section>
+</form>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='sign.js') }}"></script>
+{% endblock %}

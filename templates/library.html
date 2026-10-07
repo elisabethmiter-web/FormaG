@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Form library{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><span class="eyebrow">Form library</span><h1>Your forms</h1><p class="muted">Reusable forms you can add to any packet.{% if not is_manager %} View only: ask management to add or remove forms.{% endif %}</p></div>
+  {% if is_manager %}<div class="row">
+    <a class="btn" href="{{ url_for('new_form') }}">Build a fillable form</a></div>{% endif %}
+</div>
+{% if is_manager %}
+
+<details class="panel" {{ 'open' if not templates }}>
+  <summary style="cursor:pointer"><h3 style="display:inline">Upload a file</h3> <span class="muted small">— PDF, Word, Excel, images or any other file you send often</span></summary>
+  <form method="post" action="{{ url_for('upload_pdf') }}" enctype="multipart/form-data" class="stack" id="upload-form">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="fields_json" id="fields_json" value="[]">
+    <div class="grid-2">
+      <label for="file">File <span class="hint">Any type, up to 50 MB</span><input id="file" type="file" name="file" required></label>
+      <label for="name">Form name <span class="hint">Shown to your client</span><input id="name" type="text" name="name" placeholder="e.g. Engagement letter 2026"></label>
+    </div>
+    <div class="stack" style="gap:8px">
+      <h3>Extra fields to collect <span class="hint">(optional)</span></h3>
+      <p class="muted small">The client reviews the file, fills these in, then signs. Leave empty if they only need to sign. PDFs show on screen; other file types are downloaded to review.</p>
+      <div class="builder-list" id="builder"></div>
+      <div><button type="button" class="btn" id="add-field">Add field</button></div>
+    </div>
+    <div><button class="btn btn-primary">Add to library</button></div>
+  </form>
+</details>
+{% elif not templates %}
+<section class="panel empty"><h2>No forms yet</h2><p class="muted">Management hasn't added any forms. You can still send one-off files from New packet.</p></section>
+{% endif %}
+
+{% if templates %}
+<div class="forms-grid">
+  {% for t in templates %}
+  <article class="form-card">
+    <span class="kind">{{ t.file_name|filetype if t.kind in ('pdf','file') and t.file_name else {'pdf':'PDF document','file':'File','form':'Fillable form'}[t.kind] }}{% if t.field_count %} · {{ t.field_count }} field{{ 's' if t.field_count!=1 }}{% endif %}</span>
+    <h3>{{ t.name }}</h3>
+    <span class="muted small">Added {{ t.created_at|day }}</span>
+    <div class="actions">
+      <a class="btn" href="{{ url_for('new_packet', t=t.id) }}">Send</a>
+      {% if t.kind in ('pdf','file') %}<a class="btn btn-quiet" href="{{ url_for('template_file', tid=t.id) }}" target="_blank">{{ 'Preview' if t.kind=='pdf' else 'Download' }}</a>{% endif %}
+      {% if is_manager %}
+      <a class="btn btn-quiet" href="{{ url_for('edit_form', tid=t.id) }}">Edit</a>
+      <form method="post" action="{{ url_for('archive_form', tid=t.id) }}" data-confirm="Remove “{{ t.name }}” from the library?">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn btn-quiet btn-danger">Remove</button></form>
+      {% endif %}
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if is_manager %}<script src="{{ url_for('static', filename='builder.js') }}"></script>
+<script>FormBuilder.mount(document.getElementById('builder'), document.getElementById('add-field'), document.getElementById('fields_json'), []);</script>{% endif %}
+<script src="{{ url_for('static', filename='confirm.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Your account{% endblock %}
+{% block wrapclass %}narrow{% endblock %}
+{% block content %}
+<div class="page-head"><div><span class="eyebrow">{{ ROLE_LABELS[current_user.role] }}</span><h1>{{ current_user.name }}</h1><p class="muted">{{ current_user.email }}</p></div></div>
+<form method="post" class="panel" style="max-width:460px">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <h2>{{ 'Choose your password' if current_user.must_change_password else 'Change password' }}</h2>
+  {% if current_user.must_change_password %}<p class="muted small">You signed in with a temporary password. Pick one only you know.</p>{% endif %}
+  <label for="current">{{ 'Temporary password' if current_user.must_change_password else 'Current password' }}<input id="current" type="password" name="current" autocomplete="current-password" required></label>
+  <label for="new">New password <span class="hint">At least 8 characters</span><input id="new" type="password" name="new" autocomplete="new-password" minlength="8" required></label>
+  <label for="confirm">Repeat new password<input id="confirm" type="password" name="confirm" autocomplete="new-password" minlength="8" required></label>
+  <div><button class="btn btn-primary">Save password</button></div>
+</form>
+{% endblock %}

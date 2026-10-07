@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+{% include "_head.html" %}
+<title>{% block title %}{% endblock %} · {{ business_name }}</title>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="{{ url_for('dashboard') }}">{% include "_mark.html" %}{{ business_name }}</a>
+    <nav class="nav">
+      <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint in ('dashboard','packet_detail') }}">Packets</a>
+      <a href="{{ url_for('library') }}" class="{{ 'active' if request.endpoint in ('library','new_form','edit_form') }}">Form library</a>
+      {% if is_manager %}<a href="{{ url_for('team') }}" class="{{ 'active' if request.endpoint=='team' }}">Team</a>{% endif %}
+    </nav>
+    <a class="btn btn-primary" href="{{ url_for('new_packet') }}">New packet</a>
+    {% if current_user %}<a class="user-chip" href="{{ url_for('account') }}" title="Change your password"><strong>{{ current_user.name }}</strong><span>{{ ROLE_LABELS[current_user.role] }}</span></a>{% endif %}
+    <form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn btn-quiet">Sign out</button></form>
+  </div>
+</header>
+<main class="wrap {% block wrapclass %}{% endblock %}">
+{% include "_flash.html" %}
+{% block content %}{% endblock %}
+</main>
+{% block scripts %}{% endblock %}
+</body>
+</html>

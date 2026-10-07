@@ -1,0 +1,8 @@
+{% extends "client_base.html" %}
+{% block title %}Link unavailable{% endblock %}
+{% block content %}
+<section class="panel receipt">
+  <h1>{{ 'This link has expired' if reason=='expired' else 'This request was cancelled' }}</h1>
+  <p class="muted" style="max-width:48ch">{{ 'Ask ' ~ business_name ~ ' to send you a new link.' if reason=='expired' else business_name ~ ' cancelled this signing request. Contact them if you think this is a mistake.' }}</p>
+</section>
+{% endblock %}

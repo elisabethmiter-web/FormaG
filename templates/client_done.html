@@ -1,0 +1,35 @@
+{% extends "client_base.html" %}
+{% block title %}All done{% endblock %}
+{% block content %}
+{% set signed_items = items|selectattr('signed_at')|list %}
+{% set files = items|selectattr('template_file')|selectattr('template_kind','equalto','file')|list + items|rejectattr('requires_signature')|rejectattr('template_kind','equalto','file')|selectattr('template_file')|list %}
+<section class="panel receipt">
+  <div class="seal"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+  <h1>All done, thank you</h1>
+  <p class="muted" style="max-width:52ch">{{ business_name }} has {{ 'received your signed forms' if signed_items else 'been told you received the files' }}. {{ 'A copy has been emailed to ' ~ p.client_email ~ '.' if email_enabled else 'Download copies below for your records.' }}</p>
+  <span class="ref">Confirmation {{ packet_ref(p) }}</span>
+  <span class="muted small">Completed {{ p.completed_at|when }}</span>
+</section>
+{% if signed_items %}
+<section class="panel">
+  <h2>Your signed copies</h2>
+  <div class="doc-list">
+  {% for it in signed_items %}
+    <div class="doc-row"><div class="doc-main"><strong>{{ it.template_name }}</strong><span class="small muted">Signed by {{ it.signer_name }} · {{ it.signed_at|when }}</span></div>
+      <a class="btn" href="{{ url_for('client_signed', token=p.token, iid=it.id) }}">Signed PDF</a></div>
+  {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% if files %}
+<section class="panel">
+  <h2>Files</h2>
+  <div class="doc-list">
+  {% for it in files %}
+    <div class="doc-row"><div class="doc-main"><strong>{{ it.file_name or it.template_name }}</strong><span class="small muted">{{ it.file_name|filetype }}</span></div>
+      <a class="btn" href="{{ url_for('client_doc', token=p.token, iid=it.id, download=1) }}">Download</a></div>
+  {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}
