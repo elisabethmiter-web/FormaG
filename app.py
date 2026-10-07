@@ -391,13 +391,12 @@ def actor():
 
 
 # ---------------------------------------------------------------- who sees which packets
-# Management and the owner see every packet. Staff see the packets they created, plus any packet
-# where they are named as the sales rep (so a manager can set one up for them).
+# Management and the owner see every packet. Staff see only the packets they created.
 def packet_scope():
     """SQL condition (and its arguments) limiting packets to the ones the signed-in user may see."""
     if is_manager():
         return "1=1", []
-    return "(created_by_id = ? OR (sales_rep != '' AND sales_rep = ? COLLATE NOCASE))", [g.user["id"], g.user["name"]]
+    return "created_by_id = ?", [g.user["id"]]
 
 
 @app.before_request
@@ -581,11 +580,11 @@ def effective_status(p):
 
 
 # ---------------------------------------------------------------- admin: dashboard
-def sales_reps():
-    cond, args = packet_scope()
-    return [r[0] for r in db().execute(
-        f"SELECT DISTINCT sales_rep FROM packets WHERE sales_rep != '' AND {cond} ORDER BY sales_rep COLLATE NOCASE",
-        args)]
+def creators():
+    """(id, name) of everyone who has created packets, for the management filter."""
+    return [(r[0], r[1] or "Owner") for r in db().execute(
+        "SELECT created_by_id, MAX(created_by) FROM packets WHERE created_by_id IS NOT NULL "
+        "GROUP BY created_by_id ORDER BY MAX(created_by) COLLATE NOCASE")]
 
 
 def still_needed(pid):
@@ -599,18 +598,17 @@ def still_needed(pid):
 @login_required
 def dashboard():
     q = request.args.get("q", "").strip()[:100]
-    rep_filter = request.args.get("rep", "").strip()[:80]
+    by_filter = request.args.get("by", "").strip()
+    by_filter = int(by_filter) if by_filter.lstrip("-").isdigit() and is_manager() else None
     cond, args = packet_scope()
     sql = f"SELECT * FROM packets WHERE {cond}"
     if q:
         like = f"%{q.replace('%', '').replace('_', '')}%"
-        sql += (" AND (so_number LIKE ? OR sales_rep LIKE ? OR client_name LIKE ? OR client_email LIKE ?"
-                " OR REPLACE(REPLACE(UPPER(so_number), 'SO', ''), '#', '') LIKE ?)")
-        bare = q.upper().replace("SO", "").replace("#", "").strip()
-        args += [like, like, like, like, f"%{bare}%" if bare else like]
-    if rep_filter:
-        sql += " AND sales_rep = ?"
-        args.append(rep_filter)
+        sql += " AND (client_name LIKE ? OR client_email LIKE ?)"
+        args += [like, like]
+    if by_filter is not None:
+        sql += " AND created_by_id = ?"
+        args.append(by_filter)
     # Newest first, so the packets sent most recently are always at the top.
     rows = db().execute(sql + " ORDER BY COALESCE(sent_at, created_at) DESC, id DESC", args).fetchall()
     packets = []
@@ -641,7 +639,8 @@ def dashboard():
         packets = [p for p in packets if p["state"] == "completed"]
     has_templates = db().execute("SELECT 1 FROM templates WHERE archived=0 LIMIT 1").fetchone()
     return render_template("dashboard.html", packets=packets, counts=counts, show=filt, sign_hours=SIGN_WITHIN_HOURS,
-                           has_templates=bool(has_templates), q=q, rep=rep_filter, reps=sales_reps())
+                           has_templates=bool(has_templates), q=q, by=by_filter, creators=creators() if is_manager() else [],
+                           by_name=dict(creators()).get(by_filter, "") if by_filter is not None else "")
 
 
 # ---------------------------------------------------------------- admin: form library
@@ -712,7 +711,6 @@ def item_viewer(it):
 
 
 IMAGE_MIMES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
-app.jinja_env.globals.update(sales_reps=lambda: sales_reps())
 
 
 @app.template_filter("fromjson")
@@ -872,9 +870,8 @@ def new_packet():
         expires = (datetime.now(timezone.utc) + timedelta(days=days)).replace(microsecond=0).isoformat()
         cur = db().execute(
             "INSERT INTO packets (token, client_name, client_email, message, status, created_at, expires_at, "
-            "so_number, sales_rep, created_by, created_by_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "created_by, created_by_id) VALUES (?,?,?,?,?,?,?,?,?)",
             (token, name, email, request.form.get("message", "").strip(), "draft", now(), expires,
-             request.form.get("so_number", "").strip()[:40], request.form.get("sales_rep", "").strip()[:80],
              actor(), g.user["id"]))
         pid = cur.lastrowid
         by_id = {t["id"]: t for t in templates}
@@ -947,17 +944,6 @@ def packet_detail(pid):
     return render_template("packet_detail.html", p=p, items=items, events=events, signed=signed,
                            deadline=deadline_info(p), followups=followups_of(p), sign_hours=SIGN_WITHIN_HOURS,
                            total=total, state=effective_status(p), link=signing_url(p["token"]))
-
-
-@app.route("/packets/<int:pid>/details", methods=["POST"])
-@login_required
-def update_packet_details(pid):
-    db().execute("UPDATE packets SET so_number=?, sales_rep=? WHERE id=?",
-                 (request.form.get("so_number", "").strip()[:40], request.form.get("sales_rep", "").strip()[:80], pid))
-    log_event(pid, "details", f"SO# / sales rep updated by {actor()}")
-    db().commit()
-    flash("Details saved.", "ok")
-    return redirect(url_for("packet_detail", pid=pid))
 
 
 @app.route("/packets/<int:pid>/followups", methods=["POST"])
@@ -1174,7 +1160,7 @@ def client_form(token, iid):
                     "client_email": p["client_email"], "signer_name": signer, "signed_at": ts,
                     "ip": client_ip(), "user_agent": request.headers.get("User-Agent", "")[:300],
                     "form_name": it["template_name"], "original_sha256": it["template_sha256"],
-                    "so_number": p["so_number"] or ""}
+                    }
             source = (os.path.join(UPLOAD_DIR, it["template_file"])
                       if it["template_kind"] == "pdf" else None)
             if it["template_kind"] == "file":

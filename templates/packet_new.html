@@ -9,9 +9,6 @@
   <div class="grid-2">
     <label for="client_name">Client name<input id="client_name" type="text" name="client_name" value="{{ form.get('client_name','') }}" required></label>
     <label for="client_email">Client email<input id="client_email" type="email" name="client_email" value="{{ form.get('client_email','') }}" required></label>
-    <label for="so_number">SO# <span class="hint">Sales order number</span><input id="so_number" type="text" name="so_number" value="{{ form.get('so_number','') }}" placeholder="e.g. SO-10482" autocomplete="off"></label>
-    <label for="sales_rep">Sales rep<input id="sales_rep" type="text" name="sales_rep" value="{{ form.get('sales_rep', current_user.name if current_user and current_user.id else '') }}" list="rep-list" autocomplete="off" placeholder="Start typing a name"></label>
-    <datalist id="rep-list">{% for r in sales_reps() %}<option value="{{ r }}">{% endfor %}</datalist>
   </div>
   <fieldset class="stack" style="border:0;padding:0;margin:0;gap:8px">
     <legend style="font-weight:500;margin-bottom:8px">Forms to include</legend>

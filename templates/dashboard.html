@@ -3,7 +3,7 @@
 {% block content %}
 <div class="page-head">
   <div><span class="eyebrow">{{ 'All packets · every user' if is_manager else 'Your packets' }}</span><h1>Who still needs to sign</h1>
-  {% if not is_manager %}<p class="muted small">Showing packets you created or where you're the sales rep.</p>{% endif %}</div>
+  {% if not is_manager %}<p class="muted small">Showing the packets you created.</p>{% endif %}</div>
 </div>
 
 <div class="stats">
@@ -17,34 +17,33 @@
   <form class="search-bar" method="get" role="search">
     <input type="hidden" name="show" value="{{ show }}">
     <label for="q" class="search-q"><span class="sr-only">Search</span>
-      <input id="q" type="search" name="q" value="{{ q }}" placeholder="Search SO#, client name or email, sales rep"></label>
-    <label for="rep" class="search-rep"><span class="sr-only">Sales rep</span>
-      <select id="rep" name="rep" onchange="this.form.submit()"><option value="">All sales reps</option>
-      {% for r in reps %}<option value="{{ r }}" {{ 'selected' if r==rep }}>{{ r }}</option>{% endfor %}</select></label>
+      <input id="q" type="search" name="q" value="{{ q }}" placeholder="Search client name or email"></label>
+    {% if creators %}<label for="by" class="search-rep"><span class="sr-only">Created by</span>
+      <select id="by" name="by" onchange="this.form.submit()"><option value="">Everyone</option>
+      {% for cid, cname in creators %}<option value="{{ cid }}" {{ 'selected' if cid==by }}>{{ cname }}</option>{% endfor %}</select></label>{% endif %}
     <button class="btn">Search</button>
-    {% if q or rep %}<a class="btn btn-quiet" href="?show={{ show }}">Clear</a>{% endif %}
+    {% if q or by_name %}<a class="btn btn-quiet" href="?show={{ show }}">Clear</a>{% endif %}
   </form>
   <div class="panel-head">
     <div class="tabs">
-      {% set extra = ('&q=' ~ q|urlencode if q else '') ~ ('&rep=' ~ rep|urlencode if rep else '') %}
+      {% set extra = ('&q=' ~ q|urlencode if q else '') ~ ('&by=' ~ by if by_name else '') %}
       <a href="?show=all{{ extra }}" class="{{ 'active' if show=='all' }}">All</a>
       <a href="?show=open{{ extra }}" class="{{ 'active' if show=='open' }}">Open</a>
       <a href="?show=awaiting{{ extra }}" class="{{ 'active' if show=='awaiting' }}">Awaiting client</a>
       <a href="?show=overdue{{ extra }}" class="{{ 'active' if show=='overdue' }} tab-overdue">Overdue{% if counts.overdue %} ({{ counts.overdue }}){% endif %}</a>
       <a href="?show=completed{{ extra }}" class="{{ 'active' if show=='completed' }}">Completed</a>
     </div>
-    {% if q or rep %}<span class="muted small">{{ packets|length }} result{{ 's' if packets|length!=1 }}{% if q %} for “{{ q }}”{% endif %}{% if rep %} · {{ rep }}{% endif %}</span>{% endif %}
+    {% if q or by_name %}<span class="muted small">{{ packets|length }} result{{ 's' if packets|length!=1 }}{% if q %} for “{{ q }}”{% endif %}{% if by_name %} · {{ by_name }}{% endif %}</span>{% endif %}
   </div>
   {% if packets %}
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Client</th><th>SO#</th><th>Sales rep</th><th>Status</th><th>Signed</th><th>Sent / due</th><th>Last follow-up</th></tr></thead>
+    <thead><tr><th>Client</th>{% if is_manager %}<th>Created by</th>{% endif %}<th>Status</th><th>Signed</th><th>Sent / due</th><th>Last follow-up</th></tr></thead>
     <tbody>
     {% for p in packets %}
       <tr class="clickable {{ 'row-overdue' if p.deadline.overdue }}" onclick="location.href='{{ url_for('packet_detail', pid=p.id) }}'">
         <td><div class="client-cell"><a href="{{ url_for('packet_detail', pid=p.id) }}">{{ p.client_name }}</a><span class="muted small">{{ p.client_email }}</span></div></td>
-        <td class="mono">{{ p.so_number or '—' }}</td>
-        <td class="small">{{ p.sales_rep or '—' }}{% if is_manager and p.created_by and p.created_by != p.sales_rep %}<div class="muted">by {{ p.created_by }}</div>{% endif %}</td>
+        {% if is_manager %}<td class="small">{{ p.created_by or 'Owner' }}</td>{% endif %}
         <td><span class="stamp s-{{ p.state }}">{{ {'draft':'Draft','sent':'Sent','viewed':'Opened','in_progress':'In progress','completed':'Signed','expired':'Expired','voided':'Cancelled'}[p.state] }}</span>
           {% if p.missing %}<div class="still-needed" title="{{ p.missing|join(', ') }}"><span>Still needed:</span><ul>{% for m in p.missing[:4] %}<li>{{ m }}</li>{% endfor %}{% if p.missing|length > 4 %}<li>+ {{ p.missing|length - 4 }} more</li>{% endif %}</ul></div>
           {% elif p.total == 0 and p.state not in ('completed','voided') %}<div class="still-needed"><span>Receipt not confirmed yet</span></div>{% endif %}</td>
@@ -58,9 +57,9 @@
   </div>
   {% else %}
   <div class="empty">
-    <h2>{{ 'No matches' if (q or rep) else ('No packets ' ~ ('here' if show!='all' else 'yet')) }}</h2>
-    {% if q or rep %}
-      <p class="muted">Nothing matches{% if q %} “{{ q }}”{% endif %}{% if rep %} for {{ rep }}{% endif %}. Check the spelling or clear the search.</p>
+    <h2>{{ 'No matches' if (q or by_name) else ('No packets ' ~ ('here' if show!='all' else 'yet')) }}</h2>
+    {% if q or by_name %}
+      <p class="muted">Nothing matches{% if q %} “{{ q }}”{% endif %}{% if by_name %} for {{ by_name }}{% endif %}. Check the spelling or clear the search.</p>
       <a class="btn" href="?show={{ show }}">Clear search</a>
     {% elif not has_templates %}
       <p class="muted">Start by adding the forms you send to clients: upload your PDFs or build a fillable form. Then bundle them into a packet.</p>

@@ -101,7 +101,6 @@ def _certificate(meta, sig_path):
         ("IP address", meta.get("ip") or "—"),
         ("Device", meta.get("user_agent") or "—"),
         ("Confirmation", meta["packet_ref"]),
-        *((("Sales order (SO#)", meta["so_number"]),) if meta.get("so_number") else ()),
         ("Requested by", meta["business"]),
     ]
     rows = [[_p(k, LABEL), _p(v, VALUE if k != "Device" else SMALL)] for k, v in details]
@@ -316,7 +315,6 @@ def audit_trail(out_path, business, packet, items, events):
     story = [_p("Audit trail", H1), _p(f"{business} · Confirmation {ref}", SMALL), Spacer(1, 10),
              _p("Packet", H2)]
     info = [("Client", f"{packet['client_name']} <{packet['client_email']}>"),
-            ("SO#", packet.get("so_number") or "—"), ("Sales rep", packet.get("sales_rep") or "—"),
             ("Created", _when(packet["created_at"])), ("Sent", _when(packet["sent_at"])),
             ("First opened", _when(packet["first_viewed_at"])),
             ("Completed", _when(packet["completed_at"]) or "Not yet")]

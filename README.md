@@ -25,8 +25,8 @@ Signatures are "simple electronic signatures" (drawn or typed, plus consent and 
 
 - **Owner**: sign in with **admin** and the `ADMIN_PASSWORD` server setting. Always has management access, so you can't lock yourself out.
 - **Team** page (management only): create logins with a name, email, access level and a temporary password. People choose their own password the first time they sign in. Managers can change someone's access, reset a password, deactivate a login (it stops working immediately, and can be turned back on), or **remove** it for good. When you remove someone, their packets are never deleted: you choose who gets them, or leave them visible to management only. You can't remove or deactivate your own login.
-- **Staff** only see **their own packets**: the ones they created, plus any packet where they are named as the sales rep (so a manager can set one up for them). Opening another person's packet by its address shows "Page not found". Staff can create, send and track packets and use library forms, but can't add, edit or remove forms in the library (the buttons are hidden and the server refuses those actions).
-- **Management** (and the owner) see **every packet from every user**, with a "by …" line under the sales rep showing who created it. They can also manage the form library and the Team page.
+- **Staff** only see **their own packets**: the ones they created. Opening another person's packet by its address shows "Page not found". Staff can create, send and track packets and use library forms, but can't add, edit or remove forms in the library (the buttons are hidden and the server refuses those actions).
+- **Management** (and the owner) see **every packet from every user**, with a **Created by** column and a filter to show one person's packets. They can also manage the form library and the Team page.
 
 ## Dashboard order and missing forms
 
@@ -43,12 +43,6 @@ The client reads every document right above where they sign:
 - Word, Excel, PowerPoint, OpenDocument, RTF, CSV and text files are converted and shown the same way when the app runs with Docker (the Dockerfile installs LibreOffice). Without Docker, Word (.docx), Excel (.xlsx), CSV and text files get a simplified preview.
 - Pictures are shown directly. Files that can't be previewed (ZIP, CAD...) are offered as a download.
 - When the client signs a Word/Excel file, the signed PDF includes its pages stamped with the signature; the original file is kept too.
-
-## SO# and sales rep
-
-- Every packet has optional **SO#** and **Sales rep** fields (New packet page). Sales rep suggests names you've used before.
-- Both show on the dashboard and packet page, and can be corrected on the packet page. The client sees the SO# on their packet page, and it's printed on the signed PDFs and the audit trail.
-- **Dashboard search** finds packets by SO# (with or without the "SO" prefix), client name or email, or sales rep. The **All sales reps** menu narrows the list to one rep and combines with the search and the All / Open / Completed tabs.
 
 ## One-off files and any file type
 

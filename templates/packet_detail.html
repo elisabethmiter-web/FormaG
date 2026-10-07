@@ -6,7 +6,7 @@
 <div class="page-head">
   <div><a href="{{ url_for('dashboard') }}" class="small">← Packets</a>
     <div class="row"><h1>{{ p.client_name }}</h1><span class="stamp s-{{ state }}">{{ labels[state] }}</span></div>
-    <p class="muted">{{ p.client_email }} · <span class="mono">{{ packet_ref(p) }}</span>{% if p.so_number %} · <strong>SO# {{ p.so_number }}</strong>{% endif %}{% if p.sales_rep %} · Rep: {{ p.sales_rep }}{% endif %}</p></div>
+    <p class="muted">{{ p.client_email }} · <span class="mono">{{ packet_ref(p) }}</span></p></div>
   <div class="row">
     <a class="btn" href="{{ url_for('admin_audit_pdf', pid=p.id) }}">Audit trail PDF</a>
   </div>
@@ -83,14 +83,6 @@
   <aside class="stack">
     <section class="panel">
       <h2>Details</h2>
-      <form method="post" action="{{ url_for('update_packet_details', pid=p.id) }}" class="stack" style="gap:10px">
-        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-        <div class="grid-2" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
-          <label for="so_number" class="small">SO#<input id="so_number" type="text" name="so_number" value="{{ p.so_number or '' }}"></label>
-          <label for="sales_rep" class="small">Sales rep<input id="sales_rep" type="text" name="sales_rep" value="{{ p.sales_rep or '' }}" list="rep-list"></label>
-        </div><datalist id="rep-list">{% for r in sales_reps() %}<option value="{{ r }}">{% endfor %}</datalist>
-        <div><button class="btn btn-quiet small">Save</button></div>
-      </form>
       <dl class="meta">
         <dt>Created</dt><dd>{{ p.created_at|when }}{% if p.created_by %} · {{ p.created_by }}{% endif %}</dd>
         <dt>Sent</dt><dd>{{ p.sent_at|when }}</dd>
