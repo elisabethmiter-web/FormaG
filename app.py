@@ -38,7 +38,10 @@ for d in (DATA_DIR, UPLOAD_DIR, SIGNED_DIR):
     os.makedirs(d, exist_ok=True)
 
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
-BUSINESS_NAME = os.environ.get("BUSINESS_NAME", "FormSign")
+PLATFORM_NAME = os.environ.get("PLATFORM_NAME", "FormSign")   # your service's name (login page, owner screens)
+BUSINESS_NAME = os.environ.get("BUSINESS_NAME", "")            # only used to name the first company when upgrading
+ALLOW_SIGNUP = os.environ.get("ALLOW_SIGNUP", "1") == "1"      # companies can create their own account
+INCLUDED_STORAGE_GB = int(os.environ.get("INCLUDED_STORAGE_GB", "25"))
 BASE_URL = os.environ.get("BASE_URL", "").rstrip("/")
 LINK_DAYS = int(os.environ.get("LINK_EXPIRY_DAYS", "30"))
 SIGN_WITHIN_HOURS = int(os.environ.get("SIGN_WITHIN_HOURS", "48"))   # target time for the client to finish
@@ -63,6 +66,15 @@ FIELD_TYPES = ["text", "textarea", "email", "phone", "date", "number", "checkbox
 
 # ---------------------------------------------------------------- database
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS companies (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','suspended')),
+  notify_email TEXT DEFAULT '',
+  storage_gb INTEGER NOT NULL DEFAULT 25,
+  source TEXT NOT NULL DEFAULT 'owner',
+  created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS templates (
   id INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
@@ -74,7 +86,8 @@ CREATE TABLE IF NOT EXISTS templates (
   archived INTEGER DEFAULT 0,
   created_at TEXT NOT NULL,
   file_name TEXT,
-  file_mime TEXT
+  file_mime TEXT,
+  company_id INTEGER
 );
 CREATE TABLE IF NOT EXISTS packets (
   id INTEGER PRIMARY KEY,
@@ -94,7 +107,8 @@ CREATE TABLE IF NOT EXISTS packets (
   created_by TEXT DEFAULT '',
   created_by_id INTEGER,
   followups_json TEXT DEFAULT '[]',
-  notes TEXT DEFAULT ''
+  notes TEXT DEFAULT '',
+  company_id INTEGER
 );
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY,
@@ -105,7 +119,8 @@ CREATE TABLE IF NOT EXISTS users (
   active INTEGER NOT NULL DEFAULT 1,
   must_change_password INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,
-  last_login_at TEXT
+  last_login_at TEXT,
+  company_id INTEGER
 );
 CREATE TABLE IF NOT EXISTS packet_items (
   id INTEGER PRIMARY KEY,
@@ -198,7 +213,27 @@ def _init_db_locked():
         conn.execute("ALTER TABLE packets ADD COLUMN followups_json TEXT DEFAULT '[]'")
     if cols and "created_by_id" not in cols:
         conn.execute("ALTER TABLE packets ADD COLUMN created_by_id INTEGER")
+    for table in ("templates", "packets", "users"):
+        tcols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if tcols and "company_id" not in tcols:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN company_id INTEGER")
     conn.executescript(SCHEMA)
+    conn.executescript("CREATE INDEX IF NOT EXISTS ix_packets_company ON packets(company_id);"
+                       "CREATE INDEX IF NOT EXISTS ix_templates_company ON templates(company_id);"
+                       "CREATE INDEX IF NOT EXISTS ix_users_company ON users(company_id);")
+    # Upgrading from the single-company version: everything that exists becomes the first company.
+    orphans = sum(conn.execute(f"SELECT COUNT(*) FROM {t} WHERE company_id IS NULL").fetchone()[0]
+                  for t in ("templates", "packets", "users"))
+    if orphans:
+        first = conn.execute("SELECT id FROM companies ORDER BY id LIMIT 1").fetchone()
+        if first:
+            first_id = first[0]
+        else:
+            first_id = conn.execute("INSERT INTO companies (name, storage_gb, source, created_at) VALUES (?,?,?,?)",
+                                    (BUSINESS_NAME or "My company", INCLUDED_STORAGE_GB, "owner",
+                                     datetime.now(timezone.utc).replace(microsecond=0).isoformat())).lastrowid
+        for t in ("templates", "packets", "users"):
+            conn.execute(f"UPDATE {t} SET company_id=? WHERE company_id IS NULL", (first_id,))
     # Older packets only stored the creator's name: link them to that login, or to the owner if none matches.
     conn.execute("UPDATE packets SET created_by_id = COALESCE((SELECT u.id FROM users u WHERE u.name = "
                  "packets.created_by COLLATE NOCASE ORDER BY u.id LIMIT 1), 0) WHERE created_by_id IS NULL")
@@ -304,9 +339,25 @@ def fmt_day(value):
         return value
 
 
+def biz():
+    """Name shown to clients and on documents: the company the page or packet belongs to."""
+    c = g.get("company")
+    return c["name"] if c else PLATFORM_NAME
+
+
+def cid():
+    """The signed-in user's company id."""
+    return g.company["id"]
+
+
+def get_company(company_id):
+    row = db().execute("SELECT * FROM companies WHERE id=?", (company_id,)).fetchone()
+    return dict(row) if row else None
+
+
 @app.context_processor
 def inject_globals():
-    return {"business_name": BUSINESS_NAME, "csrf_token": csrf_token,
+    return {"business_name": biz(), "platform_name": PLATFORM_NAME, "csrf_token": csrf_token,
             "email_enabled": mailer.enabled()}
 
 
@@ -329,28 +380,39 @@ def check_csrf():
 # Two kinds of sign-in:
 #   * staff      – create, send and track packets; can view the form library but not change it
 #   * manager    – everything staff can do, plus add/edit/remove library forms and manage team logins
-# The ADMIN_PASSWORD environment variable is the owner login (username "admin"). It always works,
-# has manager rights, and is how the first team accounts are created.
+# Every login belongs to one company and only ever sees that company's forms, packets and team.
+# The ADMIN_PASSWORD environment variable is the platform owner login (username "admin"): it manages
+# companies on the Companies screen and can open any company with management rights to help it.
 ROLE_LABELS = {"staff": "Staff", "manager": "Management"}
-OWNER = {"id": 0, "name": "Owner", "email": "admin", "role": "manager", "active": 1, "must_change_password": 0}
+OWNER = {"id": 0, "name": "Platform owner", "email": "admin", "role": "manager", "active": 1,
+         "must_change_password": 0}
 _failed_logins = {}  # ip -> [timestamps]; slows down password guessing
 
 
 @app.before_request
 def load_user():
     g.user = None
+    g.company = None
     uid = session.get("uid")
     if uid is None:
         return
     if uid == 0:
         if ADMIN_PASSWORD:
             g.user = OWNER
+            if session.get("as_company"):  # the owner has opened one company to help it
+                g.company = get_company(session["as_company"])
         return
     row = db().execute("SELECT * FROM users WHERE id=? AND active=1", (uid,)).fetchone()
-    if row and session.get("pwv") == row["password_hash"][-12:]:
+    company = get_company(row["company_id"]) if row else None
+    if row and company and company["status"] == "active" and session.get("pwv") == row["password_hash"][-12:]:
         g.user = dict(row)
+        g.company = company
     else:
-        session.pop("uid", None)  # deactivated or password changed elsewhere
+        session.pop("uid", None)  # deactivated, company suspended, or password changed elsewhere
+
+
+def is_owner():
+    return bool(g.get("user")) and g.user["id"] == 0
 
 
 def is_manager():
@@ -359,7 +421,8 @@ def is_manager():
 
 @app.context_processor
 def inject_user():
-    return {"current_user": g.get("user"), "is_manager": is_manager(), "ROLE_LABELS": ROLE_LABELS}
+    return {"current_user": g.get("user"), "is_manager": is_manager(), "ROLE_LABELS": ROLE_LABELS,
+            "in_company": bool(g.get("company"))}
 
 
 def login_required(view):
@@ -367,6 +430,8 @@ def login_required(view):
     def wrapper(*args, **kwargs):
         if not g.get("user"):
             return redirect(url_for("login", next=request.path))
+        if not g.get("company"):  # platform owner who hasn't opened a company
+            return redirect(url_for("platform"))
         if g.user.get("must_change_password") and request.endpoint not in ("account", "logout"):
             flash("Choose your own password before continuing.", "error")
             return redirect(url_for("account"))
@@ -386,6 +451,15 @@ def manager_required(view):
     return wrapper
 
 
+def owner_required(view):
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        if not is_owner():
+            return redirect(url_for("login", next=request.path))
+        return view(*args, **kwargs)
+    return wrapper
+
+
 def actor():
     return g.user["name"] if g.get("user") else ""
 
@@ -395,15 +469,16 @@ def actor():
 def packet_scope():
     """SQL condition (and its arguments) limiting packets to the ones the signed-in user may see."""
     if is_manager():
-        return "1=1", []
-    return "created_by_id = ?", [g.user["id"]]
+        return "company_id = ?", [cid()]
+    return "company_id = ? AND created_by_id = ?", [cid(), g.user["id"]]
 
 
 @app.before_request
 def guard_packet_access():
-    """Every staff page about one packet (/packets/<pid>/...) checks the packet is theirs."""
+    """Every page about one packet (/packets/<pid>/...) checks the packet belongs to this company,
+    and for staff that it is theirs."""
     pid = (request.view_args or {}).get("pid")
-    if pid is None or not g.get("user") or is_manager():
+    if pid is None or not g.get("user") or not g.get("company"):
         return
     cond, args = packet_scope()
     if not db().execute(f"SELECT 1 FROM packets WHERE id=? AND {cond}", [pid] + args).fetchone():
@@ -420,6 +495,7 @@ def login():
         email = request.form.get("email", "").strip()
         password = request.form.get("password", "")
         user = None
+        suspended = False
         if len(recent) >= 8:
             error = "Too many attempts. Wait 15 minutes and try again."
         elif email.lower() == "admin":
@@ -428,7 +504,13 @@ def login():
         else:
             row = db().execute("SELECT * FROM users WHERE email=? AND active=1", (email,)).fetchone()
             if row and check_password_hash(row["password_hash"], password):
-                user = dict(row)
+                company = get_company(row["company_id"])
+                if company and company["status"] == "active":
+                    user = dict(row)
+                else:
+                    suspended = True
+                    error = (f"Your company's {PLATFORM_NAME} account is paused. "
+                             f"Contact {PLATFORM_NAME} to turn it back on.")
         if user:
             session.clear()
             session["uid"] = user["id"]
@@ -439,11 +521,60 @@ def login():
             session.permanent = True
             _failed_logins.pop(ip, None)
             nxt = request.args.get("next", "")
+            if not user["id"]:
+                return redirect(url_for("platform"))
             return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("dashboard"))
-        if not error:
+        if not error and not suspended:
             _failed_logins[ip].append(datetime.now(timezone.utc).timestamp())
             error = "That email and password don't match an active account."
-    return render_template("login.html", error=error, email=request.form.get("email", ""))
+    return render_template("login.html", error=error, email=request.form.get("email", ""), allow_signup=ALLOW_SIGNUP)
+
+
+_signups = {}  # ip -> [timestamps]; stops one visitor creating many companies
+
+
+@app.route("/signup", methods=["GET", "POST"])
+def signup():
+    """A new company creates its own account; the person signing up becomes its first manager."""
+    if not ALLOW_SIGNUP:
+        abort(404)
+    if g.get("user"):
+        return redirect(url_for("dashboard"))
+    form = request.form
+    if request.method == "POST":
+        ip = client_ip()
+        recent = [t for t in _signups.get(ip, []) if t > datetime.now(timezone.utc).timestamp() - 3600]
+        company = form.get("company", "").strip()[:100]
+        name = form.get("name", "").strip()[:80]
+        email = form.get("email", "").strip()[:120]
+        pw = form.get("password", "")
+        problem = None
+        if len(recent) >= 5:
+            problem = "Too many new accounts from this connection. Try again in an hour."
+        elif not company or not name or "@" not in email:
+            problem = "Add your company name, your name and a valid email address."
+        elif db().execute("SELECT 1 FROM users WHERE email=?", (email,)).fetchone():
+            problem = "That email already has a login. Sign in instead, or use a different email."
+        elif pw != form.get("confirm", ""):
+            problem = "The passwords don't match."
+        else:
+            problem = valid_password(pw)
+        if problem:
+            flash(problem, "error")
+        else:
+            new_cid = db().execute("INSERT INTO companies (name, notify_email, storage_gb, source, created_at) "
+                                   "VALUES (?,?,?,?,?)", (company, email, INCLUDED_STORAGE_GB, "signup", now())).lastrowid
+            h = generate_password_hash(pw)
+            uid = db().execute("INSERT INTO users (name, email, password_hash, role, must_change_password, created_at, "
+                               "company_id) VALUES (?,?,?,?,0,?,?)", (name, email, h, "manager", now(), new_cid)).lastrowid
+            db().commit()
+            _signups[ip] = recent + [datetime.now(timezone.utc).timestamp()]
+            session.clear()
+            session["uid"], session["pwv"] = uid, h[-12:]
+            session.permanent = True
+            flash(f"Welcome to {PLATFORM_NAME}. Add your forms to the library, then add your team under Team.", "ok")
+            return redirect(url_for("library"))
+    return render_template("signup.html", form=form)
 
 
 def valid_password(pw):
@@ -457,8 +588,8 @@ def account():
     if not g.get("user"):
         return redirect(url_for("login"))
     if g.user["id"] == 0:
-        flash("The owner login's password is the ADMIN_PASSWORD setting on your server.", "ok")
-        return redirect(url_for("dashboard"))
+        flash("The platform owner's password is the ADMIN_PASSWORD setting on your server.", "ok")
+        return redirect(url_for("platform"))
     if request.method == "POST":
         current, new, confirm = (request.form.get(k, "") for k in ("current", "new", "confirm"))
         problem = None
@@ -494,27 +625,27 @@ def team():
         elif role not in ROLE_LABELS:
             problem = "Choose Staff or Management."
         elif db().execute("SELECT 1 FROM users WHERE email=?", (email,)).fetchone():
-            problem = "Someone already has a login with that email."
+            problem = "That email already has a login. Each person needs their own email address."
         else:
             problem = valid_password(pw)
         if problem:
             flash(problem, "error")
         else:
-            db().execute("INSERT INTO users (name, email, password_hash, role, created_at) VALUES (?,?,?,?,?)",
-                         (name, email, generate_password_hash(pw), role, now()))
+            db().execute("INSERT INTO users (name, email, password_hash, role, created_at, company_id) "
+                         "VALUES (?,?,?,?,?,?)", (name, email, generate_password_hash(pw), role, now(), cid()))
             db().commit()
             flash(f"Login created for {name} ({ROLE_LABELS[role]}). Give them the temporary password; "
                   f"they'll choose their own when they first sign in.", "ok")
             return redirect(url_for("team"))
     users = db().execute("SELECT u.*, (SELECT COUNT(*) FROM packets p WHERE p.created_by_id = u.id) AS packet_count "
-                         "FROM users u ORDER BY active DESC, role DESC, name COLLATE NOCASE").fetchall()
+                         "FROM users u WHERE u.company_id=? ORDER BY active DESC, role DESC, name COLLATE NOCASE", (cid(),)).fetchall()
     return render_template("team.html", users=users, form=request.form)
 
 
 @app.route("/team/<int:uid>", methods=["POST"])
 @manager_required
 def team_update(uid):
-    u = db().execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone() or abort(404)
+    u = db().execute("SELECT * FROM users WHERE id=? AND company_id=?", (uid, cid())).fetchone() or abort(404)
     action = request.form.get("action")
     if action == "role" and request.form.get("role") in ROLE_LABELS:
         if uid == g.user["id"] and request.form["role"] != "manager":
@@ -543,7 +674,8 @@ def team_update(uid):
         else:
             # Their packets are never deleted: they move to another login, or to management only.
             to = request.form.get("transfer_to", "0")
-            new_owner = db().execute("SELECT id, name FROM users WHERE id=? AND id != ?", (to, uid)).fetchone() \
+            new_owner = db().execute("SELECT id, name FROM users WHERE id=? AND id != ? AND company_id=?",
+                                     (to, uid, cid())).fetchone() \
                 if to.isdigit() and to != "0" else None
             n = db().execute("UPDATE packets SET created_by_id=? WHERE created_by_id=?",
                              (new_owner["id"] if new_owner else 0, uid)).rowcount
@@ -552,6 +684,138 @@ def team_update(uid):
             flash(f"{u['name']}'s login was removed." + (f" Their {n} packet{'s' if n != 1 else ''} {'were' if n != 1 else 'was'} {where}." if n else ""), "ok")
     db().commit()
     return redirect(url_for("team"))
+
+
+# ---------------------------------------------------------------- company settings & storage
+def company_storage_bytes(company_id):
+    """Disk space used by one company's library files, packet files and signed copies."""
+    files = set()
+    for (f,) in db().execute("SELECT file_path FROM templates WHERE company_id=? AND file_path IS NOT NULL",
+                             (company_id,)):
+        files.add((UPLOAD_DIR, f))
+    for r in db().execute("SELECT i.template_file, i.signed_pdf_path, i.signature_path, i.config_json "
+                          "FROM packet_items i JOIN packets p ON p.id = i.packet_id WHERE p.company_id=?",
+                          (company_id,)):
+        if r["template_file"]:
+            files.add((UPLOAD_DIR, r["template_file"]))
+        for f in (r["signed_pdf_path"], r["signature_path"]):
+            if f:
+                files.add((SIGNED_DIR, f))
+        try:
+            for o in json.loads(r["config_json"] or "{}").get("options", []):
+                for f in (o.get("file"), o.get("display")):
+                    if f:
+                        files.add((UPLOAD_DIR, f))
+        except (ValueError, AttributeError):
+            pass
+    total = 0
+    for folder, f in files:
+        try:
+            total += os.path.getsize(os.path.join(folder, os.path.basename(f)))
+        except OSError:
+            pass
+    return total
+
+
+@app.template_filter("gb")
+def fmt_gb(n):
+    gb = (n or 0) / 1024 ** 3
+    return f"{gb:.2f} GB" if gb >= 0.1 else f"{(n or 0) / 1024 ** 2:.1f} MB"
+
+
+@app.route("/company", methods=["GET", "POST"])
+@manager_required
+def company_settings():
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()[:100]
+        notify = request.form.get("notify_email", "").strip()[:120]
+        if not name:
+            flash("Your company name can't be empty. Clients see it on every packet.", "error")
+        elif notify and "@" not in notify:
+            flash("Enter a valid notification email, or leave it empty.", "error")
+        else:
+            db().execute("UPDATE companies SET name=?, notify_email=? WHERE id=?", (name, notify, cid()))
+            db().commit()
+            flash("Company details saved.", "ok")
+            return redirect(url_for("company_settings"))
+    used = company_storage_bytes(cid())
+    users = db().execute("SELECT COUNT(*) FROM users WHERE company_id=? AND active=1", (cid(),)).fetchone()[0]
+    return render_template("company.html", c=g.company, used=used, users=users,
+                           limit=g.company["storage_gb"] * 1024 ** 3)
+
+
+@app.route("/platform", methods=["GET", "POST"])
+@owner_required
+def platform():
+    """Platform owner: every company using this server."""
+    form = request.form
+    if request.method == "POST":
+        company = form.get("company", "").strip()[:100]
+        name = form.get("name", "").strip()[:80]
+        email = form.get("email", "").strip()[:120]
+        pw = form.get("password", "")
+        gb = form.get("storage_gb", str(INCLUDED_STORAGE_GB))
+        problem = None
+        if not company or not name or "@" not in email:
+            problem = "Add the company name and its first manager's name and email."
+        elif not gb.isdigit() or not 1 <= int(gb) <= 100000:
+            problem = "Storage must be a whole number of GB."
+        elif db().execute("SELECT 1 FROM users WHERE email=?", (email,)).fetchone():
+            problem = "That email already has a login in another company."
+        else:
+            problem = valid_password(pw)
+        if problem:
+            flash(problem, "error")
+        else:
+            new_cid = db().execute("INSERT INTO companies (name, notify_email, storage_gb, source, created_at) "
+                                   "VALUES (?,?,?,?,?)", (company, email, int(gb), "owner", now())).lastrowid
+            db().execute("INSERT INTO users (name, email, password_hash, role, created_at, company_id) "
+                         "VALUES (?,?,?,?,?,?)", (name, email, generate_password_hash(pw), "manager", now(), new_cid))
+            db().commit()
+            flash(f"{company} is set up. Send {name} the sign-in address, their email and the temporary password; "
+                  f"they'll choose their own password and can then add their team.", "ok")
+            return redirect(url_for("platform"))
+    rows = db().execute(
+        "SELECT c.*, (SELECT COUNT(*) FROM users u WHERE u.company_id=c.id AND u.active=1) AS user_count, "
+        "(SELECT COUNT(*) FROM users u WHERE u.company_id=c.id AND u.active=1 AND u.role='manager') AS manager_count, "
+        "(SELECT COUNT(*) FROM packets p WHERE p.company_id=c.id) AS packet_count, "
+        "(SELECT MAX(COALESCE(p.sent_at, p.created_at)) FROM packets p WHERE p.company_id=c.id) AS last_packet, "
+        "(SELECT MAX(u.last_login_at) FROM users u WHERE u.company_id=c.id) AS last_login "
+        "FROM companies c ORDER BY c.status, c.name COLLATE NOCASE").fetchall()
+    companies = [{**dict(r), "used": company_storage_bytes(r["id"])} for r in rows]
+    return render_template("platform.html", companies=companies, form=form, allow_signup=ALLOW_SIGNUP,
+                           default_gb=INCLUDED_STORAGE_GB)
+
+
+@app.route("/platform/<int:company_id>", methods=["POST"])
+@owner_required
+def platform_update(company_id):
+    c = get_company(company_id) or abort(404)
+    action = request.form.get("action")
+    if action == "open":
+        session["as_company"] = company_id
+        flash(f"You're now in {c['name']} with management access. Use “Back to all companies” when you're done.", "ok")
+        return redirect(url_for("dashboard"))
+    if action in ("suspend", "activate"):
+        db().execute("UPDATE companies SET status=? WHERE id=?",
+                     ("suspended" if action == "suspend" else "active", company_id))
+        flash(f"{c['name']} is {'paused: its team can no longer sign in. Signing links already sent still work' if action == 'suspend' else 'active again: its team can sign in'}.", "ok")
+    elif action == "storage":
+        gb = request.form.get("storage_gb", "")
+        if gb.isdigit() and 1 <= int(gb) <= 100000:
+            db().execute("UPDATE companies SET storage_gb=? WHERE id=?", (int(gb), company_id))
+            flash(f"{c['name']} now has {gb} GB of storage.", "ok")
+        else:
+            flash("Storage must be a whole number of GB.", "error")
+    db().commit()
+    return redirect(url_for("platform"))
+
+
+@app.route("/platform/exit", methods=["POST"])
+@owner_required
+def platform_exit():
+    session.pop("as_company", None)
+    return redirect(url_for("platform"))
 
 
 @app.route("/logout", methods=["POST"])
@@ -583,8 +847,8 @@ def effective_status(p):
 def creators():
     """(id, name) of everyone who has created packets, for the management filter."""
     return [(r[0], r[1] or "Owner") for r in db().execute(
-        "SELECT created_by_id, MAX(created_by) FROM packets WHERE created_by_id IS NOT NULL "
-        "GROUP BY created_by_id ORDER BY MAX(created_by) COLLATE NOCASE")]
+        "SELECT created_by_id, MAX(created_by) FROM packets WHERE created_by_id IS NOT NULL AND company_id=? "
+        "GROUP BY created_by_id ORDER BY MAX(created_by) COLLATE NOCASE", (cid(),))]
 
 
 def still_needed(pid):
@@ -637,7 +901,8 @@ def dashboard():
         packets = [p for p in packets if p["deadline"]["overdue"]]
     elif filt == "completed":
         packets = [p for p in packets if p["state"] == "completed"]
-    has_templates = db().execute("SELECT 1 FROM templates WHERE archived=0 LIMIT 1").fetchone()
+    has_templates = db().execute("SELECT 1 FROM templates WHERE archived=0 AND company_id=? LIMIT 1",
+                                 (cid(),)).fetchone()
     return render_template("dashboard.html", packets=packets, counts=counts, show=filt, sign_hours=SIGN_WITHIN_HOURS,
                            has_templates=bool(has_templates), q=q, by=by_filter, creators=creators() if is_manager() else [],
                            by_name=dict(creators()).get(by_filter, "") if by_filter is not None else "")
@@ -647,7 +912,8 @@ def dashboard():
 @app.route("/library")
 @login_required
 def library():
-    rows = db().execute("SELECT * FROM templates WHERE archived=0 ORDER BY name COLLATE NOCASE").fetchall()
+    rows = db().execute("SELECT * FROM templates WHERE archived=0 AND company_id=? ORDER BY name COLLATE NOCASE",
+                         (cid(),)).fetchall()
     templates = [{**dict(t), "field_count": len(json.loads(t["fields_json"] or "[]"))} for t in rows]
     return render_template("library.html", templates=templates)
 
@@ -759,9 +1025,9 @@ def upload_pdf():
     fields = parse_fields_from_request()
     db().execute(
         "INSERT INTO templates (name, kind, description, file_path, file_sha256, fields_json, created_at, "
-        "file_name, file_mime) VALUES (?,?,?,?,?,?,?,?,?)",
+        "file_name, file_mime, company_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
         (name or os.path.splitext(up["name"])[0], up["kind"], request.form.get("description", "").strip(),
-         up["stored"], up["sha256"], json.dumps(fields), now(), up["name"], up["mime"]))
+         up["stored"], up["sha256"], json.dumps(fields), now(), up["name"], up["mime"], cid()))
     db().commit()
     flash("Added to your library.", "ok")
     return redirect(url_for("library"))
@@ -797,8 +1063,8 @@ def new_form():
                                    fields_json=request.form.get("fields_json", "[]"),
                                    name=name, body=request.form.get("body", ""))
         db().execute(
-            "INSERT INTO templates (name, kind, description, fields_json, created_at) VALUES (?,?,?,?,?)",
-            (name, "form", request.form.get("body", "").strip(), json.dumps(fields), now()))
+            "INSERT INTO templates (name, kind, description, fields_json, created_at, company_id) VALUES (?,?,?,?,?,?)",
+            (name, "form", request.form.get("body", "").strip(), json.dumps(fields), now(), cid()))
         db().commit()
         flash("Form created.", "ok")
         return redirect(url_for("library"))
@@ -808,15 +1074,16 @@ def new_form():
 @app.route("/library/<int:tid>/edit", methods=["GET", "POST"])
 @manager_required
 def edit_form(tid):
-    t = db().execute("SELECT * FROM templates WHERE id=? AND archived=0", (tid,)).fetchone() or abort(404)
+    t = db().execute("SELECT * FROM templates WHERE id=? AND archived=0 AND company_id=?",
+                     (tid, cid())).fetchone() or abort(404)
     if request.method == "POST":
         name = request.form.get("name", "").strip() or t["name"]
         fields = parse_fields_from_request()
         if t["kind"] == "form" and not fields:
             flash("A fillable form needs at least one field.", "error")
             return redirect(url_for("edit_form", tid=tid))
-        db().execute("UPDATE templates SET name=?, description=?, fields_json=? WHERE id=?",
-                     (name, request.form.get("body", "").strip(), json.dumps(fields), tid))
+        db().execute("UPDATE templates SET name=?, description=?, fields_json=? WHERE id=? AND company_id=?",
+                     (name, request.form.get("body", "").strip(), json.dumps(fields), tid, cid()))
         db().commit()
         flash("Saved. Packets already sent keep the version they were sent with.", "ok")
         return redirect(url_for("library"))
@@ -827,7 +1094,7 @@ def edit_form(tid):
 @app.route("/library/<int:tid>/archive", methods=["POST"])
 @manager_required
 def archive_form(tid):
-    db().execute("UPDATE templates SET archived=1 WHERE id=?", (tid,))
+    db().execute("UPDATE templates SET archived=1 WHERE id=? AND company_id=?", (tid, cid()))
     db().commit()
     flash("Form removed from the library. Past packets are unaffected.", "ok")
     return redirect(url_for("library"))
@@ -836,7 +1103,7 @@ def archive_form(tid):
 @app.route("/library/<int:tid>/file")
 @login_required
 def template_file(tid):
-    t = db().execute("SELECT * FROM templates WHERE id=?", (tid,)).fetchone() or abort(404)
+    t = db().execute("SELECT * FROM templates WHERE id=? AND company_id=?", (tid, cid())).fetchone() or abort(404)
     if not t["file_path"]:
         abort(404)
     return send_stored(t["file_path"], t["file_mime"] or "application/pdf", t["file_name"] or f"{t['name']}.pdf")
@@ -846,11 +1113,13 @@ def template_file(tid):
 @app.route("/packets/new", methods=["GET", "POST"])
 @login_required
 def new_packet():
-    templates = db().execute("SELECT * FROM templates WHERE archived=0 ORDER BY name COLLATE NOCASE").fetchall()
+    templates = db().execute("SELECT * FROM templates WHERE archived=0 AND company_id=? ORDER BY name COLLATE NOCASE",
+                         (cid(),)).fetchall()
     if request.method == "POST":
         name = request.form.get("client_name", "").strip()
         email = request.form.get("client_email", "").strip()
         ids = [int(x) for x in request.form.getlist("template_ids") if x.isdigit()]
+        ids = [i for i in ids if i in {t["id"] for t in templates}]  # only this company's forms
         adhoc = [f for f in request.files.getlist("adhoc_files") if f and f.filename]
         if not name or "@" not in email or not (ids or adhoc):
             flash("Add the client's name, a valid email, and at least one form or file.", "error")
@@ -870,9 +1139,9 @@ def new_packet():
         expires = (datetime.now(timezone.utc) + timedelta(days=days)).replace(microsecond=0).isoformat()
         cur = db().execute(
             "INSERT INTO packets (token, client_name, client_email, message, status, created_at, expires_at, "
-            "created_by, created_by_id) VALUES (?,?,?,?,?,?,?,?,?)",
+            "created_by, created_by_id, company_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
             (token, name, email, request.form.get("message", "").strip(), "draft", now(), expires,
-             actor(), g.user["id"]))
+             actor(), g.user["id"], cid()))
         pid = cur.lastrowid
         by_id = {t["id"]: t for t in templates}
         for pos, tid in enumerate(ids):
@@ -921,9 +1190,9 @@ def send_packet_email(pid):
     items = db().execute("SELECT template_name FROM packet_items WHERE packet_id=? ORDER BY position",
                          (pid,)).fetchall()
     try:
-        mailer.send_request(p["client_email"], p["client_name"], BUSINESS_NAME,
+        mailer.send_request(p["client_email"], p["client_name"], biz(),
                             [i["template_name"] for i in items], signing_url(p["token"]),
-                            p["message"], p["expires_at"])
+                            p["message"], p["expires_at"], reply_to=(staff_recipients(p) or [None])[0])
         mark_sent(pid, "email")
         flash(f"Sent to {p['client_email']}.", "ok")
     except Exception as exc:  # noqa: BLE001
@@ -1046,7 +1315,7 @@ def admin_audit_pdf(pid):
     items = db().execute("SELECT * FROM packet_items WHERE packet_id=? ORDER BY position", (pid,)).fetchall()
     events = db().execute("SELECT * FROM events WHERE packet_id=? ORDER BY at, id", (pid,)).fetchall()
     path = os.path.join(SIGNED_DIR, f"audit-{pid}-{secrets.token_hex(4)}.pdf")
-    pdfgen.audit_trail(path, BUSINESS_NAME, dict(p), [dict(i) for i in items], [dict(e) for e in events])
+    pdfgen.audit_trail(path, biz(), dict(p), [dict(i) for i in items], [dict(e) for e in events])
     return send_file(path, mimetype="application/pdf", download_name=f"audit-trail-{pid}.pdf")
 
 
@@ -1055,6 +1324,7 @@ def load_packet(token):
     p = db().execute("SELECT * FROM packets WHERE token=?", (token,)).fetchone()
     if not p:
         abort(404)
+    g.company = get_company(p["company_id"])
     return p
 
 
@@ -1156,7 +1426,7 @@ def client_form(token, iid):
                 fh.write(sig_bytes)
             out_name = f"{p['id']}-{iid}-{secrets.token_hex(6)}.pdf"
             out_path = os.path.join(SIGNED_DIR, out_name)
-            meta = {"business": BUSINESS_NAME, "packet_ref": packet_ref(p), "client_name": p["client_name"],
+            meta = {"business": biz(), "packet_ref": packet_ref(p), "client_name": p["client_name"],
                     "client_email": p["client_email"], "signer_name": signer, "signed_at": ts,
                     "ip": client_ip(), "user_agent": request.headers.get("User-Agent", "")[:300],
                     "form_name": it["template_name"], "original_sha256": it["template_sha256"],
@@ -1205,6 +1475,18 @@ def packet_ref(p):
 app.jinja_env.globals["packet_ref"] = packet_ref
 
 
+def staff_recipients(p):
+    """Who at the company hears that a packet is complete: its sender and the company's notification email."""
+    out = []
+    sender = db().execute("SELECT email FROM users WHERE id=? AND active=1 AND company_id=?",
+                          (p["created_by_id"] or -1, p["company_id"])).fetchone()
+    company = get_company(p["company_id"])
+    for e in (sender["email"] if sender else "", company["notify_email"] if company else ""):
+        if e and "@" in e and e.lower() not in [o.lower() for o in out]:
+            out.append(e)
+    return out or [a for a in [mailer.admin_email()] if a]
+
+
 def complete_packet(pid, reason="all forms signed"):
     db().execute("UPDATE packets SET status='completed', completed_at=? WHERE id=? AND completed_at IS NULL",
                  (now(), pid))
@@ -1219,10 +1501,11 @@ def complete_packet(pid, reason="all forms signed"):
         files += [(i["file_name"], os.path.join(UPLOAD_DIR, i["template_file"])) for i in items
                   if i["template_kind"] == "file" or (not i["requires_signature"] and i["template_file"])]
         try:
-            mailer.send_completed(p["client_email"], p["client_name"], BUSINESS_NAME, packet_ref(p), files,
+            mailer.send_completed(p["client_email"], p["client_name"], biz(), packet_ref(p), files,
                                   admin_link=None)
-            mailer.send_completed(mailer.admin_email(), p["client_name"], BUSINESS_NAME, packet_ref(p), files,
-                                  admin_link=(BASE_URL or "") + url_for("packet_detail", pid=pid))
+            for to in staff_recipients(p):
+                mailer.send_completed(to, p["client_name"], biz(), packet_ref(p), files,
+                                      admin_link=(BASE_URL or "") + url_for("packet_detail", pid=pid))
             log_event(pid, "receipt_emailed", "client and owner")
         except Exception as exc:  # noqa: BLE001
             log_event(pid, "email_failed", str(exc)[:200])

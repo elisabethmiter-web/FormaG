@@ -39,13 +39,13 @@ def _wrap(inner):
 color:#1d2433;line-height:1.5">{inner}</div>"""
 
 
-def send_request(to, client_name, business, form_names, link, message, expires_at):
+def send_request(to, client_name, business, form_names, link, message, expires_at, reply_to=None):
     msg = EmailMessage()
     msg["Subject"] = f"{business}: {len(form_names)} form{'s' if len(form_names) != 1 else ''} to sign"
     msg["From"] = os.environ["SMTP_FROM"]
     msg["To"] = to
-    if os.environ.get("ADMIN_EMAIL"):
-        msg["Reply-To"] = os.environ["ADMIN_EMAIL"]
+    if reply_to or os.environ.get("ADMIN_EMAIL"):
+        msg["Reply-To"] = reply_to or os.environ["ADMIN_EMAIL"]  # replies reach the company, not the platform
     items = "\n".join(f"  • {n}" for n in form_names)
     note = f"\n{message}\n" if message else ""
     msg.set_content(

@@ -337,3 +337,10 @@ tbody tr.row-overdue:hover td { background: color-mix(in srgb, var(--late-soft) 
   border: 1px solid var(--rule); border-radius: 8px; text-align: left; white-space: normal; }
 td.mono, td.nowrap { white-space: nowrap; }
 .still-needed { min-width: 190px; }
+
+/* ===================== companies ===================== */
+.owner-bar { background: var(--late-soft); color: var(--ink); border-bottom: 1px solid var(--rule); font-size: 0.9rem; }
+.owner-bar .topbar-inner { min-height: 44px; justify-content: space-between; gap: 12px; }
+.meter { height: 10px; background: var(--bg); border: 1px solid var(--rule); border-radius: 999px; overflow: hidden; }
+.meter span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+.meter span.meter-full { background: var(--late); }

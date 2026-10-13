@@ -21,12 +21,26 @@ Signatures are "simple electronic signatures" (drawn or typed, plus consent and 
 - The dashboard's **Last follow-up** column shows the latest follow-up number, date and note, or "None yet" in orange when an overdue packet hasn't been followed up.
 - Times are shown in Toronto time (change with the `TIMEZONE` setting, e.g. `America/Vancouver`).
 
+## Companies (one server, many businesses)
+
+Each company that uses FormSign gets its **own account**: its own managers and staff, its own form library, its own packets and signed copies. One company can never see another's data, and clients see the company's own name on signing pages, emails and signed PDFs.
+
+- **Self sign-up**: a new company clicks **Create your company account** on the sign-in page, enters its company name, the person's name, email and password, and is ready to go. That person is the company's first manager. Turn this off with `ALLOW_SIGNUP=0`.
+- **Platform owner (you)**: sign in with **admin** and the `ADMIN_PASSWORD` setting. You see the **Companies** screen: every company with its logins, packets, storage used and last activity. From there you can:
+  - **Add a company** with its first manager and a temporary password (they choose their own at first sign-in).
+  - **Open** a company to help it, with management access. An orange bar shows you're inside it; **Back to all companies** takes you out.
+  - **Pause** a company (for example, unpaid account): its team can't sign in until you turn it back on. Nothing is deleted, and signing links already sent to its clients keep working.
+  - **Change** the storage included for a company (default 25 GB, set with `INCLUDED_STORAGE_GB`).
+- **Company page** (managers): change the company name clients see, set a **notification email** that receives completion notices and client replies, and see storage used against the storage included.
+- **Sign-in**: everyone signs in with their email and password. The email decides which company they belong to, so each email can only have one login.
+- **Upgrading** from the single-company version: on first start, everything already in the database becomes one company named after your old `BUSINESS_NAME` setting. Nothing else changes for those users.
+
 ## Staff and management logins
 
-- **Owner**: sign in with **admin** and the `ADMIN_PASSWORD` server setting. Always has management access, so you can't lock yourself out.
+- Logins, roles and visibility below always apply **within one company**. If a company's only manager is locked out, the platform owner can open the company and reset their password from the Team page.
 - **Team** page (management only): create logins with a name, email, access level and a temporary password. People choose their own password the first time they sign in. Managers can change someone's access, reset a password, deactivate a login (it stops working immediately, and can be turned back on), or **remove** it for good. When you remove someone, their packets are never deleted: you choose who gets them, or leave them visible to management only. You can't remove or deactivate your own login.
 - **Staff** only see **their own packets**: the ones they created. Opening another person's packet by its address shows "Page not found". Staff can create, send and track packets and use library forms, but can't add, edit or remove forms in the library (the buttons are hidden and the server refuses those actions).
-- **Management** (and the owner) see **every packet from every user**, with a **Created by** column and a filter to show one person's packets. They can also manage the form library and the Team page.
+- **Management** sees **every packet from every user**, with a **Created by** column and a filter to show one person's packets. They can also manage the form library and the Team page.
 
 ## Dashboard order and missing forms
 
@@ -59,18 +73,18 @@ Needs Python 3.10 or newer.
 
 ```bash
 pip install -r requirements.txt
-ADMIN_PASSWORD=choose-a-password BUSINESS_NAME="Your Company" python app.py
+ADMIN_PASSWORD=choose-a-password python app.py
 ```
 
-Open http://localhost:5000 and sign in. On Windows PowerShell set variables with `$env:ADMIN_PASSWORD="..."` first.
+Open http://localhost:5000. Sign in as **admin** to add companies, or click **Create your company account**. On Windows PowerShell set variables with `$env:ADMIN_PASSWORD="..."` first.
 
 Locally, only you can open the signing links. To let clients sign, put it online.
 
 ## Put it online (Render, about US$7/month)
 
 1. Create a free GitHub account and a new **private** repository; upload this folder's contents.
-2. On [render.com](https://render.com) choose **New → Blueprint** and pick the repository. It reads `render.yaml`, which sets up the web service and a 1 GB persistent disk for your forms and signed documents.
-3. When asked, fill in `ADMIN_PASSWORD`, `BUSINESS_NAME`, and `BASE_URL` (the address Render gives you, e.g. `https://formsign-xxxx.onrender.com`, or your own domain).
+2. On [render.com](https://render.com) choose **New → Blueprint** and pick the repository. It reads `render.yaml`, which sets up the web service and a persistent disk (raise its size as companies are added; each includes 25 GB) for your forms and signed documents.
+3. When asked, fill in `ADMIN_PASSWORD` and `BASE_URL` (the address Render gives you, e.g. `https://formsign-xxxx.onrender.com`, or your own domain).
 4. Deploy, open the address, sign in.
 
 Any host that runs Docker works too (Railway, Fly.io, a VPS): build the `Dockerfile` and mount a persistent volume at `/data`.
@@ -87,17 +101,20 @@ Set these environment variables and restart. Any SMTP service works: Google Work
 | `SMTP_PORT` | `587` (or `465` for SSL) |
 | `SMTP_USER` / `SMTP_PASSWORD` | from your provider |
 | `SMTP_FROM` | `Your Company <forms@yourdomain.com>` |
-| `ADMIN_EMAIL` | where completion notices go, and the reply-to address |
+| `ADMIN_EMAIL` | fallback for completion notices and replies when a company has no notification email |
 
-With email on, you can send packets and reminders from the app, and both you and the client receive the signed PDFs when the packet is completed. Gmail accounts need an app password; for client-facing mail a transactional service (Postmark, SES) gives better delivery.
+With email on, you can send packets and reminders from the app, and the client, the person who sent the packet and the company's notification email receive the signed PDFs when the packet is completed. Gmail accounts need an app password; for client-facing mail a transactional service (Postmark, SES) gives better delivery.
 
 ## All settings
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `ADMIN_PASSWORD` | yes | Your sign-in password |
+| `ADMIN_PASSWORD` | yes | Platform owner password (sign in as **admin**) |
 | `SECRET_KEY` | yes in production | Long random string that secures sessions |
-| `BUSINESS_NAME` | recommended | Shown to clients and on PDFs |
+| `PLATFORM_NAME` | no | Your service's name on the sign-in and sign-up pages (default FormSign) |
+| `ALLOW_SIGNUP` | no | `1` lets companies create their own account (default), `0` means only you add them |
+| `INCLUDED_STORAGE_GB` | no | Storage included for each new company (default 25) |
+| `BUSINESS_NAME` | no | Only used when upgrading: names the first company |
 | `BASE_URL` | recommended | Public address, used in emailed links |
 | `DATA_DIR` | no | Storage folder (default `./data`) |
 | `LINK_EXPIRY_DAYS` | no | Default link lifetime, also used by "Extend link" (default 30) |

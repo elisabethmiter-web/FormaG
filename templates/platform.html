@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Companies{% endblock %}
+{% block content %}
+<div class="page-head"><div><span class="eyebrow">Platform owner</span><h1>Companies</h1>
+<p class="muted">Each company has its own logins, form library and packets, and can't see any other company. {% if allow_signup %}New companies can also create their own account from the sign-in page.{% else %}Self sign-up is turned off (ALLOW_SIGNUP=0), so only you can add companies.{% endif %}</p></div></div>
+
+<section class="panel">
+  <h2>Add a company</h2>
+  <form method="post" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <div class="grid-2">
+      <label for="company">Company name<input id="company" type="text" name="company" value="{{ form.get('company','') }}" maxlength="100" required></label>
+      <label for="storage_gb">Storage included (GB)<input id="storage_gb" type="number" name="storage_gb" min="1" value="{{ form.get('storage_gb', default_gb) }}" required></label>
+      <label for="name">First manager's name<input id="name" type="text" name="name" value="{{ form.get('name','') }}" maxlength="80" required></label>
+      <label for="email">First manager's email <span class="hint">Used to sign in</span><input id="email" type="email" name="email" value="{{ form.get('email','') }}" required></label>
+      <label for="password">Temporary password <span class="hint">At least 8 characters. They choose their own at first sign-in.</span><input id="password" type="text" name="password" minlength="8" autocomplete="off" required></label>
+    </div>
+    <div><button class="btn btn-primary">Create company</button></div>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>All companies <span class="muted small">({{ companies|length }})</span></h2>
+  {% if companies %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Company</th><th>Status</th><th>Logins</th><th>Packets</th><th>Storage</th><th>Last activity</th><th></th></tr></thead>
+    <tbody>
+    {% for c in companies %}
+      {% set limit = c.storage_gb * 1024 ** 3 %}
+      <tr class="{{ 'muted' if c.status != 'active' }}">
+        <td><div class="client-cell"><strong>{{ c.name }}</strong><span class="muted small">{{ c.notify_email or '—' }} · {{ 'signed up' if c.source == 'signup' else 'added by you' }} {{ c.created_at|day }}</span></div></td>
+        <td><span class="stamp {{ 's-completed' if c.status == 'active' else 's-voided' }}">{{ 'Active' if c.status == 'active' else 'Paused' }}</span></td>
+        <td class="nowrap">{{ c.user_count }} <span class="muted small">({{ c.manager_count }} mgr)</span></td>
+        <td>{{ c.packet_count }}</td>
+        <td class="nowrap"><span class="{{ 'still-needed' if c.used > limit }}">{{ c.used|gb }}</span> <span class="muted small">/ {{ c.storage_gb }} GB</span>
+          <details><summary class="small muted" style="cursor:pointer">Change</summary>
+            <form method="post" action="{{ url_for('platform_update', company_id=c.id) }}" class="row" style="gap:6px;margin-top:6px">
+              <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="storage">
+              <input type="number" name="storage_gb" min="1" value="{{ c.storage_gb }}" style="width:90px" aria-label="Storage for {{ c.name }} in GB">
+              <button class="btn small">Save</button></form></details></td>
+        <td class="small muted nowrap">{{ (c.last_packet if (c.last_packet or '') > (c.last_login or '') else c.last_login)|when }}</td>
+        <td>
+          <div class="row" style="gap:6px;justify-content:flex-end">
+            <form method="post" action="{{ url_for('platform_update', company_id=c.id) }}">
+              <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="open">
+              <button class="btn small">Open</button></form>
+            <form method="post" action="{{ url_for('platform_update', company_id=c.id) }}"
+                  {% if c.status == 'active' %}onsubmit="return confirm('Pause {{ c.name|e }}? Its team will not be able to sign in until you turn it back on.')"{% endif %}>
+              <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="{{ 'suspend' if c.status == 'active' else 'activate' }}">
+              <button class="btn btn-quiet small {{ 'btn-danger' if c.status == 'active' }}">{{ 'Pause' if c.status == 'active' else 'Turn back on' }}</button></form>
+          </div>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody></table></div>
+  {% else %}
+  <p class="muted">No companies yet. Add the first one above{% if allow_signup %}, or let a company sign up from the sign-in page{% endif %}.</p>
+  {% endif %}
+  <p class="muted small">Pausing a company stops its team signing in. Signing links already sent to its clients keep working, and nothing is deleted.</p>
+</section>
+{% endblock %}

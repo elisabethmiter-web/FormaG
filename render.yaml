@@ -8,7 +8,7 @@ services:
     disk:
       name: formsign-data
       mountPath: /var/data
-      sizeGB: 1
+      sizeGB: 25             # grow this as companies are added
     envVars:
       - key: DATA_DIR
         value: /var/data
@@ -16,7 +16,9 @@ services:
         generateValue: true
       - key: ADMIN_PASSWORD
         sync: false
-      - key: BUSINESS_NAME
-        sync: false
+      - key: PLATFORM_NAME
+        value: FormSign
+      - key: ALLOW_SIGNUP
+        value: "1"
       - key: BASE_URL
         sync: false

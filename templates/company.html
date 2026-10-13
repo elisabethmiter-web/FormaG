@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Company{% endblock %}
+{% block content %}
+<div class="page-head"><div><span class="eyebrow">Company</span><h1>{{ c.name }}</h1>
+<p class="muted">{{ users }} active login{{ 's' if users != 1 }}. Everything in this account (forms, packets, signed copies and logins) is visible only to {{ c.name }}.</p></div></div>
+
+<div class="grid-2" style="align-items:start">
+<form method="post" class="panel stack">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <h2>Details</h2>
+  <label for="name">Company name <span class="hint">Shown to clients on signing pages, emails and signed PDFs</span>
+    <input id="name" type="text" name="name" value="{{ c.name }}" maxlength="100" required></label>
+  <label for="notify_email">Notification email <span class="hint">Gets a copy when any packet is fully signed, and receives client replies. The sender of the packet is always notified too.</span>
+    <input id="notify_email" type="email" name="notify_email" value="{{ c.notify_email or '' }}" placeholder="office@yourcompany.com"></label>
+  <div><button class="btn btn-primary">Save</button></div>
+</form>
+
+<section class="panel stack">
+  <h2>Storage</h2>
+  {% set pct = (used / limit * 100) if limit else 0 %}
+  <p style="margin:0"><strong>{{ used|gb }}</strong> <span class="muted">used of {{ c.storage_gb }} GB included</span></p>
+  <div class="meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ pct|round|int }}" aria-label="Storage used">
+    <span style="width:{{ [pct, 100]|min }}%" class="{{ 'meter-full' if pct >= 90 }}"></span></div>
+  {% if pct >= 100 %}<p class="small" style="color:var(--late);margin:0">You've used all your included storage. Contact {{ platform_name }} to add more.</p>
+  {% elif pct >= 90 %}<p class="small" style="color:var(--late);margin:0">You're close to your included storage.</p>{% endif %}
+  <p class="muted small" style="margin:0">Counts your library files, files sent to clients and signed copies.</p>
+</section>
+</div>
+{% endblock %}

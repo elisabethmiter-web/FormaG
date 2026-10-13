@@ -67,8 +67,8 @@
     {% endfor %}
     </tbody></table></div>
   {% else %}
-  <p class="muted">No team logins yet. You're signed in as the owner (admin). Add your staff and managers above.</p>
+  <p class="muted">No team logins yet. Add your staff and managers above.</p>
   {% endif %}
-  <p class="muted small">The owner login (<strong>admin</strong> + ADMIN_PASSWORD) always has management access and can't be removed here, so you can't lock yourself out.</p>
+  <p class="muted small">These logins only work for {{ business_name }}: no one outside your company can see your packets or forms. Keep at least two managers so someone can always reset passwords.</p>
 </section>
 {% endblock %}
