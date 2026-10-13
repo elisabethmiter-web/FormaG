@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Email campaigns{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><span class="eyebrow">Email{{ '' if is_manager else ' · your campaigns' }}</span><h1>Campaigns</h1>
+  <p class="muted">Send one email to your whole client list, or to a group such as a tag. {{ list_count }} client{{ 's' if list_count != 1 }} can receive campaigns{{ '' if is_manager else ' from you' }}.</p></div>
+  <form method="post" action="{{ url_for('campaign_new') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn btn-primary">New campaign</button></form>
+</div>
+{% include "_email_tabs.html" %}
+{% if not email_enabled %}<div class="flash flash-error">Email isn't turned on for this server yet, so campaigns can be written but not sent. Your FormSign provider needs to add the SMTP settings.</div>{% endif %}
+
+<section class="panel">
+  {% if campaigns %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Campaign</th><th>Status</th><th>Sent to</th><th>Opened</th><th>Date</th></tr></thead>
+    <tbody>
+    {% for c in campaigns %}
+      <tr>
+        <td><div class="client-cell"><a href="{{ url_for('campaign_view', camp_id=c.id) }}"><strong>{{ c.subject or '(no subject yet)' }}</strong></a>
+          <span class="muted small">{{ audience_label(c.audience) }}{% if is_manager %} · by {{ c.created_by or 'Owner' }}{% endif %}</span></div></td>
+        <td>{% if c.status == 'draft' %}<span class="stamp s-draft">Draft</span>
+            {% elif c.status == 'sending' %}<span class="stamp s-viewed">Sending {{ c.sent }}/{{ c.total }}</span>
+            {% elif c.status == 'cancelled' %}<span class="stamp s-voided">Stopped</span>
+            {% else %}<span class="stamp s-completed">Sent</span>{% endif %}
+            {% if c.failed %}<div class="small still-needed">{{ c.failed }} failed</div>{% endif %}</td>
+        <td>{{ c.sent if c.status != 'draft' else '—' }}</td>
+        <td>{% if c.sent %}{{ c.opened }} <span class="muted small">({{ (c.opened / c.sent * 100)|round|int }}%)</span>{% else %}—{% endif %}</td>
+        <td class="small muted nowrap">{{ (c.sent_at or c.created_at)|when }}</td>
+      </tr>
+    {% endfor %}
+    </tbody></table></div>
+  {% else %}
+  <div class="empty">
+    <h2>No campaigns yet</h2>
+    <p class="muted">Write an email once and send it to all your clients: a promotion, a holiday schedule, a new product. Everyone you send a packet to is added to your client list automatically, and you can import a list from Excel or CSV.</p>
+    <a class="btn" href="{{ url_for('contacts') }}">See your client list</a>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

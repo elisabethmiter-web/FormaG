@@ -1,0 +1,4 @@
+<div class="tabs" style="margin-bottom:4px">
+  <a href="{{ url_for('campaigns_list') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('campaign') }}">Campaigns</a>
+  <a href="{{ url_for('contacts') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('contact') }}">Client list</a>
+</div>

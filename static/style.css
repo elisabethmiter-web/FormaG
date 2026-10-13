@@ -344,3 +344,10 @@ td.mono, td.nowrap { white-space: nowrap; }
 .meter { height: 10px; background: var(--bg); border: 1px solid var(--rule); border-radius: 999px; overflow: hidden; }
 .meter span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
 .meter span.meter-full { background: var(--late); }
+
+/* ===================== email campaigns ===================== */
+.campaign-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .campaign-grid { grid-template-columns: 1fr; } }
+.email-preview { width: 100%; height: 620px; border: 1px solid var(--rule); border-radius: 6px; background: #f6f7f9; }
+.chip { display: inline-block; font-size: 0.75rem; padding: 2px 8px; margin: 2px 4px 2px 0; border-radius: 999px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
+textarea#body { font-family: var(--font-body); line-height: 1.5; }

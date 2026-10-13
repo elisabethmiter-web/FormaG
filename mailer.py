@@ -83,3 +83,48 @@ def send_completed(to, client_name, business, ref, files, admin_link=None):
         with open(path, "rb") as fh:
             msg.add_attachment(fh.read(), maintype=maintype, subtype=subtype, filename=name)
     _send(msg)
+
+
+# ---------------------------------------------------------------- campaign (bulk) emails
+def open_connection():
+    """One SMTP connection reused for many campaign emails (much faster than reconnecting each time)."""
+    host = os.environ["SMTP_HOST"]
+    port = int(os.environ.get("SMTP_PORT", "587"))
+    user = os.environ.get("SMTP_USER")
+    ctx = ssl.create_default_context()
+    if port == 465:
+        s = smtplib.SMTP_SSL(host, port, context=ctx, timeout=30)
+    else:
+        s = smtplib.SMTP(host, port, timeout=30)
+        s.starttls(context=ctx)
+    if user:
+        s.login(user, os.environ.get("SMTP_PASSWORD"))
+    return s
+
+
+def close_connection(s):
+    if s is None:
+        return
+    try:
+        s.quit()
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def campaign_message(to, subject, html, text, from_name, reply_to, unsubscribe_url):
+    """A marketing email sent from the server's address under the company's name, with the one-click
+    unsubscribe headers that Gmail, Outlook and Yahoo require for bulk mail."""
+    from email.utils import formataddr, make_msgid, parseaddr
+    _, addr = parseaddr(os.environ["SMTP_FROM"])
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = formataddr((from_name, addr))
+    msg["To"] = to
+    msg["Message-ID"] = make_msgid(domain=addr.split("@")[-1] if "@" in addr else None)
+    if reply_to:
+        msg["Reply-To"] = reply_to
+    msg["List-Unsubscribe"] = f"<{unsubscribe_url}>"
+    msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
+    msg.set_content(text)
+    msg.add_alternative(html, subtype="html")
+    return msg

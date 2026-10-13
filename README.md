@@ -35,7 +35,19 @@ Each company that uses FormSign gets its **own account**: its own managers and s
 - **Sign-in**: everyone signs in with their email and password. The email decides which company they belong to, so each email can only have one login.
 - **Upgrading** from the single-company version: on first start, everything already in the database becomes one company named after your old `BUSINESS_NAME` setting. Nothing else changes for those users.
 
-## Staff and management logins
+## Email campaigns (mass email to your client list)
+
+The **Email** tab lets a company send one email to its whole client list, or to a group.
+
+- **Client list**: everyone you send a packet to is added automatically. You can also **import** a CSV or Excel (.xlsx) file (first row = headings; it needs an *Email* column and uses *Name* or *First/Last name*, *Company* and *Tags* if present) and **add people by hand**. Duplicates and invalid addresses are skipped, and you can tag everyone in a file (e.g. "Builders"). Download the list as CSV at any time.
+- **Write a campaign**: subject, message (plain text; blank lines make paragraphs, web addresses become links, `**text**` is bold), an optional button with a link, and personalization with `{first_name}`, `{name}` or `{organization}`. A live preview shows the email as clients will see it.
+- **Send to** everyone, or only clients with a given tag. **Send me a test** first, then **Review and send**. Sending runs in the background (you can close the page), shows progress, and can be stopped. If the server restarts mid-send it picks up where it stopped.
+- **Report** per campaign: sent, opened (an estimate, since some mail apps hide opens), failed (with the reason, and a *Retry failed* button) and skipped.
+- **Who can send**: managers can email the whole company list and see every campaign. Staff can send too, but only to the clients of their own packets and contacts they added themselves, and they only see their own campaigns.
+- **Canada's anti-spam law (CASL)**: every campaign email automatically includes the company name, its **mailing address** (set on the Company page; campaigns can't be sent until it's filled in), a contact email and a working **unsubscribe** link, plus the one-click unsubscribe headers Gmail, Outlook and Yahoo require. Unsubscribed clients are never emailed again, even if they appear in a later import. Before sending, the sender confirms the list is made of clients or people who agreed to receive emails. Only email people you have consent for (current clients, or people who opted in).
+- **Limits**: each company can send up to 2,000 campaign emails per 24 hours by default (`CAMPAIGN_DAILY_LIMIT`), at about 120 per minute (`CAMPAIGN_PER_MINUTE`). Match these to your email provider's plan.
+- Campaigns go out through the same SMTP settings as packets, with the company's name as the sender and replies going to the company's notification email. For bulk email use a provider built for it (Amazon SES, Postmark broadcast streams, Mailgun, SendGrid), and set up SPF and DKIM for your sending domain so emails land in the inbox.
+
 
 - Logins, roles and visibility below always apply **within one company**. If a company's only manager is locked out, the platform owner can open the company and reset their password from the Team page.
 - **Team** page (management only): create logins with a name, email, access level and a temporary password. People choose their own password the first time they sign in. Managers can change someone's access, reset a password, deactivate a login (it stops working immediately, and can be turned back on), or **remove** it for good. When you remove someone, their packets are never deleted: you choose who gets them, or leave them visible to management only. You can't remove or deactivate your own login.
@@ -114,6 +126,8 @@ With email on, you can send packets and reminders from the app, and the client, 
 | `PLATFORM_NAME` | no | Your service's name on the sign-in and sign-up pages (default FormSign) |
 | `ALLOW_SIGNUP` | no | `1` lets companies create their own account (default), `0` means only you add them |
 | `INCLUDED_STORAGE_GB` | no | Storage included for each new company (default 25) |
+| `CAMPAIGN_DAILY_LIMIT` | no | Campaign emails each company may send per 24 hours (default 2000) |
+| `CAMPAIGN_PER_MINUTE` | no | Sending speed for campaigns (default 120 per minute) |
 | `BUSINESS_NAME` | no | Only used when upgrading: names the first company |
 | `BASE_URL` | recommended | Public address, used in emailed links |
 | `DATA_DIR` | no | Storage folder (default `./data`) |
@@ -121,6 +135,7 @@ With email on, you can send packets and reminders from the app, and the client, 
 
 ## How it works
 
+- `campaigns.py`: client lists, CSV/Excel import, campaign writing, background sending, unsubscribe and open tracking.
 - `app.py`: Flask routes for the admin side (`/`, `/library`, `/packets/...`) and the client side (`/s/<token>/...`).
 - `pdfgen.py`: builds signed PDFs and audit trails with pypdf and ReportLab.
 - `mailer.py`: optional SMTP email.

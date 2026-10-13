@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Write campaign{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><span class="eyebrow">New campaign · draft</span><h1>{{ c.subject or 'Write your email' }}</h1></div>
+  <a class="btn btn-quiet" href="{{ url_for('campaigns_list') }}">Back to campaigns</a>
+</div>
+
+<div class="campaign-grid">
+<form method="post" class="panel stack" id="campaign-form">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <label for="audience">Send to
+    <select id="audience" name="audience">
+      <option value="all" {{ 'selected' if c.audience == 'all' }}>Everyone on the client list ({{ counts['all'] }})</option>
+      {% for t in tags %}<option value="tag:{{ t }}" {{ 'selected' if c.audience|lower == ('tag:' ~ t)|lower }}>Clients tagged “{{ t }}” ({{ counts['tag:' ~ t] }})</option>{% endfor %}
+    </select>
+    <span class="hint">Unsubscribed clients are always left out.{% if not is_manager %} As staff you can email the clients from your own packets and contacts you added.{% endif %}</span></label>
+  <label for="subject">Subject line<input id="subject" type="text" name="subject" value="{{ c.subject }}" maxlength="200" placeholder="e.g. Spring quartz promotion: 15% off until May 31"></label>
+  <label for="body">Message <span class="hint">Plain text. Leave a blank line between paragraphs. Web addresses become links; **text** becomes bold. Personalize with {first_name}, {name} or {organization}.</span>
+    <textarea id="body" name="body" rows="14">{{ c.body }}</textarea></label>
+  <div class="grid-2">
+    <label for="button_text">Button text <span class="hint">Optional</span><input id="button_text" type="text" name="button_text" value="{{ c.button_text }}" maxlength="60" placeholder="e.g. See the offer"></label>
+    <label for="button_url">Button link<input id="button_url" type="text" name="button_url" value="{{ c.button_url }}" maxlength="500" placeholder="https://yourwebsite.com/offer"></label>
+  </div>
+  <div class="row" style="gap:8px;flex-wrap:wrap">
+    <button class="btn" name="action" value="save">Save draft</button>
+    <button class="btn" name="action" value="test">Send me a test</button>
+    <button class="btn btn-primary" name="action" value="review">Review and send</button>
+  </div>
+  <p class="muted small" style="margin:0">Your company name, mailing address and an unsubscribe link are added at the bottom of every email automatically.</p>
+</form>
+
+<section class="panel stack">
+  <div class="panel-head"><h2>Preview</h2><span class="muted small">Save to refresh</span></div>
+  <iframe class="email-preview" src="{{ url_for('campaign_preview', camp_id=c.id) }}" title="Email preview" sandbox></iframe>
+  <form method="post" action="{{ url_for('campaign_action', camp_id=c.id) }}" onsubmit="return confirm('Delete this draft?')">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="delete">
+    <button class="btn btn-quiet small btn-danger">Delete draft</button></form>
+</section>
+</div>
+{% endblock %}

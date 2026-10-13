@@ -1,0 +1,14 @@
+{% extends "client_base.html" %}
+{% block title %}Email preferences{% endblock %}
+{% block content %}
+<section class="panel stack" style="max-width:520px;margin:40px auto">
+  {% if done %}
+  <h1 style="font-size:1.5rem">You're unsubscribed</h1>
+  <p class="muted">{{ email }} won't receive marketing emails from {{ business_name }} anymore. You'll still get forms they send you to sign.</p>
+  {% else %}
+  <h1 style="font-size:1.5rem">Unsubscribe from {{ business_name }} emails?</h1>
+  <p class="muted">Stop marketing emails to <strong>{{ email }}</strong>. Forms they send you to sign are not affected.</p>
+  <form method="post"><button class="btn btn-primary">Unsubscribe</button></form>
+  {% endif %}
+</section>
+{% endblock %}

@@ -12,6 +12,8 @@
     <input id="name" type="text" name="name" value="{{ c.name }}" maxlength="100" required></label>
   <label for="notify_email">Notification email <span class="hint">Gets a copy when any packet is fully signed, and receives client replies. The sender of the packet is always notified too.</span>
     <input id="notify_email" type="email" name="notify_email" value="{{ c.notify_email or '' }}" placeholder="office@yourcompany.com"></label>
+  <label for="mailing_address">Mailing address <span class="hint">Printed at the bottom of every campaign email. Canada's anti-spam law (CASL) requires it before you can send campaigns.</span>
+    <textarea id="mailing_address" name="mailing_address" rows="3" placeholder="123 Main Street&#10;Toronto, ON  M5V 1A1">{{ c.mailing_address or '' }}</textarea></label>
   <div><button class="btn btn-primary">Save</button></div>
 </form>
 

@@ -25,6 +25,7 @@ from flask import (Flask, abort, flash, g, redirect, render_template, request,
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
+import campaigns
 import mailer
 import pdfgen
 import preview
@@ -237,6 +238,7 @@ def _init_db_locked():
     # Older packets only stored the creator's name: link them to that login, or to the owner if none matches.
     conn.execute("UPDATE packets SET created_by_id = COALESCE((SELECT u.id FROM users u WHERE u.name = "
                  "packets.created_by COLLATE NOCASE ORDER BY u.id LIMIT 1), 0) WHERE created_by_id IS NULL")
+    campaigns.init_db(conn)  # client lists and email campaigns
     conn.commit()
     conn.close()
 
@@ -370,7 +372,7 @@ def csrf_token():
 
 @app.before_request
 def check_csrf():
-    if request.method == "POST":
+    if request.method == "POST" and not request.path.startswith("/u/"):  # /u/ = one-click unsubscribe from email apps
         sent = request.form.get("csrf") or request.headers.get("X-CSRF-Token", "")
         if not sent or not hmac.compare_digest(sent, session.get("csrf", "")):
             abort(400, "Your session expired. Reload the page and try again.")
@@ -729,12 +731,14 @@ def company_settings():
     if request.method == "POST":
         name = request.form.get("name", "").strip()[:100]
         notify = request.form.get("notify_email", "").strip()[:120]
+        address = request.form.get("mailing_address", "").strip()[:300]
         if not name:
             flash("Your company name can't be empty. Clients see it on every packet.", "error")
         elif notify and "@" not in notify:
             flash("Enter a valid notification email, or leave it empty.", "error")
         else:
-            db().execute("UPDATE companies SET name=?, notify_email=? WHERE id=?", (name, notify, cid()))
+            db().execute("UPDATE companies SET name=?, notify_email=?, mailing_address=? WHERE id=?",
+                         (name, notify, address, cid()))
             db().commit()
             flash("Company details saved.", "ok")
             return redirect(url_for("company_settings"))
@@ -1143,6 +1147,7 @@ def new_packet():
             (token, name, email, request.form.get("message", "").strip(), "draft", now(), expires,
              actor(), g.user["id"], cid()))
         pid = cur.lastrowid
+        campaigns.remember_contact(db(), cid(), name, email, g.user["id"])  # clients join the company's client list
         by_id = {t["id"]: t for t in templates}
         for pos, tid in enumerate(ids):
             t = by_id.get(tid)
@@ -1601,6 +1606,9 @@ def security_headers(resp):
     if request.path.startswith("/s/"):
         resp.headers.setdefault("X-Robots-Tag", "noindex")
     return resp
+
+
+campaigns.register(__import__("sys").modules[__name__])
 
 
 if __name__ == "__main__":

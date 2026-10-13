@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Send campaign{% endblock %}
+{% block wrapclass %}narrow{% endblock %}
+{% block content %}
+<div class="page-head"><div><span class="eyebrow">Ready to send</span><h1>{{ c.subject }}</h1></div></div>
+<form method="post" class="panel stack">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <div class="stats">
+    <div class="stat"><span class="eyebrow">Recipients</span><strong>{{ count }}</strong><span class="muted small">{{ audience_label(c.audience) }}</span></div>
+    <div class="stat"><span class="eyebrow">Time to send</span><strong>~{{ minutes }} min</strong><span class="muted small">runs in the background</span></div>
+    <div class="stat"><span class="eyebrow">Daily allowance</span><strong>{{ limit - used }}</strong><span class="muted small">of {{ limit }} emails per 24 h left</span></div>
+  </div>
+  {% if count > limit - used %}<div class="flash flash-error">This is more than your remaining daily allowance. Pick a smaller group (a tag) or send tomorrow.</div>{% endif %}
+  <label class="check"><input type="checkbox" name="confirm"> Everyone on this list is a client or agreed to receive emails from {{ business_name }}. I've sent myself a test and checked it.</label>
+  <div class="row" style="gap:8px">
+    <button class="btn btn-primary" {{ 'disabled' if count == 0 or count > limit - used }}>Send to {{ count }} client{{ 's' if count != 1 }}</button>
+    <a class="btn btn-quiet" href="{{ url_for('campaign_edit', camp_id=c.id) }}">Back to editing</a>
+  </div>
+  <p class="muted small" style="margin:0">Once sending starts you can stop it, but emails already sent can't be recalled.</p>
+</form>
+{% endblock %}

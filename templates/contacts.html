@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Client list{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><span class="eyebrow">Email{{ '' if is_manager else ' · your clients' }}</span><h1>Client list</h1>
+  <p class="muted">{{ active_count }} subscribed{% if all_count - active_count %} · {{ all_count - active_count }} unsubscribed{% endif %}. {{ 'Everyone your company sends a packet to is added automatically.' if is_manager else 'Clients from your packets and people you add or import.' }}</p></div>
+  <a class="btn" href="{{ url_for('contacts_export') }}">Download as CSV</a>
+</div>
+{% include "_email_tabs.html" %}
+
+<div class="grid-2" style="align-items:start">
+<section class="panel">
+  <h2>Import a list</h2>
+  <form method="post" action="{{ url_for('contact_import') }}" enctype="multipart/form-data" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <label for="file">CSV or Excel file <span class="hint">First row = headings. Needs an “Email” column; “Name” (or First/Last), “Company” and “Tags” are used if present.</span>
+      <input id="file" type="file" name="file" accept=".csv,.txt,.xlsx,.xlsm" required></label>
+    <label for="imp-tags">Tag everyone in this file <span class="hint">Optional, e.g. “Builders” or “2026 trade show”</span><input id="imp-tags" type="text" name="tags" maxlength="80"></label>
+    <label class="check"><input type="checkbox" name="consent" required> These people agreed to receive emails from us, or are current clients (CASL).</label>
+    <div><button class="btn btn-primary">Import</button></div>
+  </form>
+</section>
+<section class="panel">
+  <h2>Add a contact</h2>
+  <form method="post" action="{{ url_for('contact_add') }}" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <div class="grid-2">
+      <label for="c-name">Name<input id="c-name" type="text" name="name" maxlength="120"></label>
+      <label for="c-email">Email<input id="c-email" type="email" name="email" required></label>
+      <label for="c-org">Company<input id="c-org" type="text" name="organization" maxlength="120"></label>
+      <label for="c-tags">Tags <span class="hint">Comma separated</span><input id="c-tags" type="text" name="tags" maxlength="200"></label>
+    </div>
+    <label class="check"><input type="checkbox" name="consent" required> This person agreed to receive emails from us, or is a current client.</label>
+    <div><button class="btn">Add contact</button></div>
+  </form>
+</section>
+</div>
+
+<section class="panel">
+  <form class="search-bar" method="get" role="search">
+    <label for="q" class="search-q"><span class="sr-only">Search</span><input id="q" type="search" name="q" value="{{ q }}" placeholder="Search name, email or company"></label>
+    {% if tags %}<label for="tag" class="search-rep"><span class="sr-only">Tag</span>
+      <select id="tag" name="tag" onchange="this.form.submit()"><option value="">All tags</option>
+      {% for t in tags %}<option value="{{ t }}" {{ 'selected' if t|lower == tag|lower }}>{{ t }}</option>{% endfor %}</select></label>{% endif %}
+    <label for="show" class="search-rep"><span class="sr-only">Status</span>
+      <select id="show" name="show" onchange="this.form.submit()">
+        <option value="all" {{ 'selected' if show=='all' }}>Everyone</option>
+        <option value="subscribed" {{ 'selected' if show=='subscribed' }}>Subscribed</option>
+        <option value="unsubscribed" {{ 'selected' if show=='unsubscribed' }}>Unsubscribed</option></select></label>
+    <button class="btn">Search</button>
+    {% if q or tag or show != 'all' %}<a class="btn btn-quiet" href="{{ url_for('contacts') }}">Clear</a>{% endif %}
+  </form>
+  <p class="muted small" style="margin:8px 0 0">{{ total }} contact{{ 's' if total != 1 }}{% if total > contacts|length %}, showing the newest {{ contacts|length }}. Search to find others{% endif %}.</p>
+  {% if contacts %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Contact</th><th>Tags</th><th>Added from</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for c in contacts %}
+      <tr class="{{ 'muted' if c.unsubscribed_at }}">
+        <td><div class="client-cell"><strong>{{ c.name or '—' }}</strong><span class="muted small">{{ c.email }}{% if c.organization %} · {{ c.organization }}{% endif %}</span></div></td>
+        <td>{% for t in tag_list(c.tags) %}<span class="chip">{{ t }}</span>{% endfor %}</td>
+        <td class="small muted nowrap">{{ {'packet': 'Packet', 'import': 'Import', 'manual': 'Added by hand'}.get(c.source, c.source) }} · {{ c.created_at|day }}</td>
+        <td>{% if c.unsubscribed_at %}<span class="stamp s-voided">Unsubscribed</span><div class="muted small">{{ c.unsubscribed_at|day }}</div>{% else %}<span class="stamp s-completed">Subscribed</span>{% endif %}</td>
+        <td><details class="remove-user"><summary class="btn btn-quiet small">Edit</summary>
+          <div class="stack remove-box">
+            <form method="post" action="{{ url_for('contact_update', contact_id=c.id) }}" class="stack">
+              <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="edit">
+              <label class="small">Name<input type="text" name="name" value="{{ c.name }}" maxlength="120"></label>
+              <label class="small">Company<input type="text" name="organization" value="{{ c.organization }}" maxlength="120"></label>
+              <label class="small">Tags<input type="text" name="tags" value="{{ c.tags }}" maxlength="200"></label>
+              <button class="btn small">Save</button></form>
+            {% if c.unsubscribed_at %}
+            <form method="post" action="{{ url_for('contact_update', contact_id=c.id) }}" class="stack">
+              <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="resubscribe">
+              <label class="check small"><input type="checkbox" name="confirm"> They asked to be added back</label>
+              <button class="btn btn-quiet small">Resubscribe</button></form>
+            {% else %}
+            <div class="row" style="gap:6px">
+              <form method="post" action="{{ url_for('contact_update', contact_id=c.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="unsubscribe"><button class="btn btn-quiet small">Unsubscribe</button></form>
+              <form method="post" action="{{ url_for('contact_update', contact_id=c.id) }}" onsubmit="return confirm('Remove this contact from the client list?')"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="delete"><button class="btn btn-quiet small btn-danger">Remove</button></form>
+            </div>
+            {% endif %}
+          </div></details></td>
+      </tr>
+    {% endfor %}
+    </tbody></table></div>
+  {% else %}
+  <p class="muted">{{ 'No contacts match.' if q or tag or show != 'all' else 'No clients yet. Send a packet, import a list, or add someone above.' }}</p>
+  {% endif %}
+</section>
+{% endblock %}

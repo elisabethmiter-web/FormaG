@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{{ c.subject }}{% endblock %}
+{% block content %}
+{% if c.status == 'sending' %}<meta http-equiv="refresh" content="5">{% endif %}
+<div class="page-head">
+  <div><span class="eyebrow">Campaign · {{ audience_label(c.audience) }}</span><h1>{{ c.subject }}</h1>
+  <p class="muted small">{{ 'Sending since' if c.status == 'sending' else 'Sent' }} {{ c.sent_at|when }}{% if c.created_by %} by {{ c.created_by }}{% endif %}{% if c.finished_at and c.status != 'sending' %} · finished {{ c.finished_at|when }}{% endif %}</p></div>
+  <div class="row" style="gap:8px">
+    {% if c.status == 'sending' %}
+    <form method="post" action="{{ url_for('campaign_action', camp_id=c.id) }}" onsubmit="return confirm('Stop sending? Emails already sent cannot be recalled.')">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="cancel"><button class="btn btn-danger">Stop sending</button></form>
+    {% elif s.failed %}
+    <form method="post" action="{{ url_for('campaign_action', camp_id=c.id) }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="retry"><button class="btn">Retry {{ s.failed }} failed</button></form>
+    {% endif %}
+    <form method="post" action="{{ url_for('campaign_action', camp_id=c.id) }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="duplicate"><button class="btn btn-quiet">Use as a new campaign</button></form>
+  </div>
+</div>
+{% include "_email_tabs.html" %}
+
+<div class="stats">
+  <div class="stat"><span class="eyebrow">Sent</span><strong>{{ s.sent }}</strong><span class="muted small">of {{ s.total }}{% if c.status == 'sending' %} · {{ s.queued }} to go{% endif %}</span></div>
+  <div class="stat"><span class="eyebrow">Opened</span><strong>{{ s.opened }}</strong><span class="muted small">{{ ((s.opened / s.sent * 100)|round|int) if s.sent else 0 }}% · estimate, some apps hide opens</span></div>
+  <div class="stat {{ 'stat-overdue has' if s.failed }}"><span class="eyebrow">Failed</span><strong>{{ s.failed }}</strong><span class="muted small">address rejected or server error</span></div>
+  <div class="stat"><span class="eyebrow">Skipped</span><strong>{{ s.skipped }}</strong><span class="muted small">unsubscribed or stopped</span></div>
+</div>
+{% if c.status == 'sending' %}<div class="meter" style="margin-top:12px"><span style="width:{{ ((s.sent + s.failed + s.skipped) / s.total * 100) if s.total else 0 }}%"></span></div>{% endif %}
+
+<div class="grid-2" style="align-items:start;margin-top:16px">
+<section class="panel">
+  <div class="panel-head"><h2>Recipients</h2>
+    <div class="tabs">
+      <a href="?show=all" class="{{ 'active' if show=='all' }}">All</a>
+      <a href="?show=opened" class="{{ 'active' if show=='opened' }}">Opened</a>
+      <a href="?show=failed" class="{{ 'active' if show=='failed' }}">Failed</a>
+      {% if c.status == 'sending' %}<a href="?show=queued" class="{{ 'active' if show=='queued' }}">Waiting</a>{% endif %}
+    </div></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Client</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for r in recips %}
+      <tr><td><div class="client-cell"><strong>{{ r.name or r.email }}</strong>{% if r.name %}<span class="muted small">{{ r.email }}</span>{% endif %}</div></td>
+        <td class="small">{% if r.status == 'sent' %}{{ 'Opened ' ~ (r.opened_at|when) if r.opened_at else 'Sent ' ~ (r.sent_at|when) }}
+          {% elif r.status == 'failed' %}<span class="still-needed">Failed</span> <span class="muted">{{ r.error }}</span>
+          {% elif r.status == 'skipped' %}<span class="muted">Skipped ({{ r.error }})</span>
+          {% else %}<span class="muted">Waiting</span>{% endif %}</td></tr>
+    {% else %}<tr><td colspan="2" class="muted">Nobody here.</td></tr>{% endfor %}
+    </tbody></table></div>
+  {% if recips|length == 500 %}<p class="muted small">Showing the first 500.</p>{% endif %}
+</section>
+<section class="panel stack">
+  <h2>The email</h2>
+  <iframe class="email-preview" src="{{ url_for('campaign_preview', camp_id=c.id) }}" title="Email as sent" sandbox></iframe>
+</section>
+</div>
+{% endblock %}

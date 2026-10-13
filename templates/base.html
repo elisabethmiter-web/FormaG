@@ -12,6 +12,7 @@
     <nav class="nav">
       <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint in ('dashboard','packet_detail') }}">Packets</a>
       <a href="{{ url_for('library') }}" class="{{ 'active' if request.endpoint in ('library','new_form','edit_form') }}">Form library</a>
+      <a href="{{ url_for('campaigns_list') }}" class="{{ 'active' if request.endpoint and (request.endpoint.startswith('campaign') or request.endpoint.startswith('contact')) }}">Email</a>
       {% if is_manager %}<a href="{{ url_for('team') }}" class="{{ 'active' if request.endpoint=='team' }}">Team</a>
       <a href="{{ url_for('company_settings') }}" class="{{ 'active' if request.endpoint=='company_settings' }}">Company</a>{% endif %}
     </nav>
