@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>{% include "_head.html" %}<title>Choose a new password · {{ platform_name }}</title></head>
+<body>
+<main class="login-box">
+  <form class="panel" method="post">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <span class="brand">{% include "_mark.html" %}{{ platform_name }}</span>
+    <div class="stack" style="gap:4px"><h1 style="font-size:1.5rem">Choose a new password</h1>
+      <p class="muted small">For {{ row.email }}. Use at least 8 characters.</p></div>
+    {% if error %}<div class="flash flash-error">{{ error }}</div>{% endif %}
+    <label for="password">New password<input id="password" type="password" name="password" minlength="8" autocomplete="new-password" autofocus required></label>
+    <label for="confirm">Type it again<input id="confirm" type="password" name="confirm" minlength="8" autocomplete="new-password" required></label>
+    <button class="btn btn-primary btn-lg">Save new password</button>
+  </form>
+</main>
+</body>
+</html>

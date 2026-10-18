@@ -29,7 +29,8 @@
       {% set limit = c.storage_gb * 1024 ** 3 %}
       <tr class="{{ 'muted' if c.status != 'active' }}">
         <td><div class="client-cell"><strong>{{ c.name }}</strong><span class="muted small">{{ c.notify_email or '—' }} · {{ 'signed up' if c.source == 'signup' else 'added by you' }} {{ c.created_at|day }}</span></div></td>
-        <td><span class="stamp {{ 's-completed' if c.status == 'active' else 's-voided' }}">{{ 'Active' if c.status == 'active' else 'Paused' }}</span></td>
+        <td><span class="stamp {{ 's-completed' if c.status == 'active' else 's-voided' }}">{{ 'Active' if c.status == 'active' else ('Trial ended' if c.paused_reason == 'trial_ended' else 'Paused') }}</span>
+          {% if c.plan == 'trial' and c.status == 'active' %}<div class="small muted nowrap" style="margin-top:4px">Trial · ends {{ c.trial_ends_at|day }}</div>{% elif c.plan == 'paid' %}<div class="small muted" style="margin-top:4px">Paid</div>{% endif %}</td>
         <td class="nowrap">{{ c.user_count }} <span class="muted small">({{ c.manager_count }} mgr)</span></td>
         <td>{{ c.packet_count }}</td>
         <td class="nowrap"><span class="{{ 'still-needed' if c.used > limit }}">{{ c.used|gb }}</span> <span class="muted small">/ {{ c.storage_gb }} GB</span>
@@ -44,6 +45,14 @@
             <form method="post" action="{{ url_for('platform_update', company_id=c.id) }}">
               <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="open">
               <button class="btn small">Open</button></form>
+            {% if c.plan == 'trial' %}
+            <form method="post" action="{{ url_for('platform_update', company_id=c.id) }}">
+              <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="mark_paid">
+              <button class="btn small">Mark as paid</button></form>
+            <form method="post" action="{{ url_for('platform_update', company_id=c.id) }}">
+              <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="extend_trial"><input type="hidden" name="days" value="7">
+              <button class="btn btn-quiet small">+7 days trial</button></form>
+            {% endif %}
             <form method="post" action="{{ url_for('platform_update', company_id=c.id) }}"
                   {% if c.status == 'active' %}onsubmit="return confirm('Pause {{ c.name|e }}? Its team will not be able to sign in until you turn it back on.')"{% endif %}>
               <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="{{ 'suspend' if c.status == 'active' else 'activate' }}">
@@ -56,6 +65,7 @@
   {% else %}
   <p class="muted">No companies yet. Add the first one above{% if allow_signup %}, or let a company sign up from the sign-in page{% endif %}.</p>
   {% endif %}
+  <p class="muted small">Companies that sign up themselves start a free trial and pause on their own when it ends. <strong>Mark as paid</strong> keeps them on for good; <strong>+7 days trial</strong> gives them more time.</p>
   <p class="muted small">Pausing a company stops its team signing in. Signing links already sent to its clients keep working, and nothing is deleted.</p>
 </section>
 {% endblock %}

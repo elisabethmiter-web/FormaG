@@ -7,12 +7,13 @@
     <input type="hidden" name="csrf" value="{{ csrf_token() }}">
     <span class="brand">{% include "_mark.html" %}{{ platform_name }}</span>
     <div class="stack" style="gap:4px"><h1 style="font-size:1.5rem">Sign in</h1><p class="muted small">Sign in with your work email. You'll see your own company's forms and packets.</p></div>
+    {% include "_flash.html" %}
     {% if error %}<div class="flash flash-error">{{ error }}</div>{% endif %}
     <label for="email">Email<input id="email" type="text" name="email" value="{{ email or '' }}" autofocus autocomplete="username" inputmode="email"></label>
     <label for="password">Password<input id="password" type="password" name="password" autocomplete="current-password"></label>
     <button class="btn btn-primary btn-lg">Sign in</button>
     {% if allow_signup %}<p class="small" style="margin:0">New company? <a href="{{ url_for('signup') }}">Create your company account</a></p>{% endif %}
-    <p class="muted small" style="margin:0">Forgot your password? Ask a manager at your company to reset it.</p>
+    <p class="small" style="margin:0"><a href="{{ url_for('forgot_password') }}">Forgot your password?</a></p>
   </form>
 </main>
 </body>

@@ -4,10 +4,15 @@
 {% include "_head.html" %}
 <meta name="robots" content="noindex">
 <title>{% block title %}{% endblock %} · {{ business_name }}</title>
+{% if brand.color %}<style>
+  body.branded { --accent: {{ brand.color }}; --accent-ink: {{ brand.ink }}; --accent-soft: color-mix(in srgb, {{ brand.color }} 12%, #ffffff); }
+  @media (prefers-color-scheme: dark) { body.branded { --accent: color-mix(in srgb, {{ brand.color }} 60%, #ffffff); --accent-ink: #10131a; --accent-soft: color-mix(in srgb, {{ brand.color }} 25%, #1a1e27); } }
+</style>{% endif %}
 </head>
-<body>
+<body class="{{ 'branded' if brand.color }}">
 <header class="client-top"><div class="inner">
-  <span class="brand">{% include "_mark.html" %}{{ business_name }}</span>
+  {% if brand.logo_url %}<span class="brand brand-logo"><img src="{{ brand.logo_url }}" alt="{{ business_name }}"></span>
+  {% else %}<span class="brand">{% include "_mark.html" %}{{ business_name }}</span>{% endif %}
   {% block topright %}{% endblock %}
 </div></header>
 <main class="client-wrap">

@@ -27,6 +27,8 @@ from werkzeug.utils import secure_filename
 
 import admin_api
 import campaigns
+import extras
+import sms
 import mailer
 import pdfgen
 import preview
@@ -241,6 +243,7 @@ def _init_db_locked():
                  "packets.created_by COLLATE NOCASE ORDER BY u.id LIMIT 1), 0) WHERE created_by_id IS NULL")
     campaigns.init_db(conn)  # client lists and email campaigns
     admin_api.init_db(conn)  # Admin Console links
+    extras.init_db(conn)  # trial, branding, reminders, texts, password resets
     conn.commit()
     conn.close()
 
@@ -513,8 +516,7 @@ def login():
                     user = dict(row)
                 else:
                     suspended = True
-                    error = (f"Your company's {PLATFORM_NAME} account is paused. "
-                             f"Contact {PLATFORM_NAME} to turn it back on.")
+                    error = extras.paused_message(company, PLATFORM_NAME)
         if user:
             session.clear()
             session["uid"] = user["id"]
@@ -568,6 +570,7 @@ def signup():
         else:
             new_cid = db().execute("INSERT INTO companies (name, notify_email, storage_gb, source, created_at) "
                                    "VALUES (?,?,?,?,?)", (company, email, INCLUDED_STORAGE_GB, "signup", now())).lastrowid
+            extras.start_trial(db(), new_cid)  # self sign-up starts a free trial that pauses on its own
             h = generate_password_hash(pw)
             uid = db().execute("INSERT INTO users (name, email, password_hash, role, must_change_password, created_at, "
                                "company_id) VALUES (?,?,?,?,0,?,?)", (name, email, h, "manager", now(), new_cid)).lastrowid
@@ -576,7 +579,8 @@ def signup():
             session.clear()
             session["uid"], session["pwv"] = uid, h[-12:]
             session.permanent = True
-            flash(f"Welcome to {PLATFORM_NAME}. Add your forms to the library, then add your team under Team.", "ok")
+            flash(f"Welcome to {PLATFORM_NAME}. Your {extras.TRIAL_DAYS}-day free trial has started. Add your forms "
+                  f"to the library, then add your team under Team.", "ok")
             return redirect(url_for("library"))
     return render_template("signup.html", form=form)
 
@@ -802,10 +806,15 @@ def platform_update(company_id):
         session["as_company"] = company_id
         flash(f"You're now in {c['name']} with management access. Use “Back to all companies” when you're done.", "ok")
         return redirect(url_for("dashboard"))
+    plan_msg = extras.owner_action(db(), company_id, action, request.form.get("days"))
+    if action in ("mark_paid", "extend_trial"):
+        db().commit()
+        flash(plan_msg, "ok")
+        return redirect(url_for("platform"))
     if action in ("suspend", "activate"):
         db().execute("UPDATE companies SET status=? WHERE id=?",
                      ("suspended" if action == "suspend" else "active", company_id))
-        flash(f"{c['name']} is {'paused: its team can no longer sign in. Signing links already sent still work' if action == 'suspend' else 'active again: its team can sign in'}.", "ok")
+        flash(plan_msg, "ok") if plan_msg else flash(f"{c['name']} is {'paused: its team can no longer sign in. Signing links already sent still work' if action == 'suspend' else 'active again: its team can sign in'}.", "ok")
     elif action == "storage":
         gb = request.form.get("storage_gb", "")
         if gb.isdigit() and 1 <= int(gb) <= 100000:
@@ -1124,6 +1133,12 @@ def new_packet():
     if request.method == "POST":
         name = request.form.get("client_name", "").strip()
         email = request.form.get("client_email", "").strip()
+        phone_raw = request.form.get("client_phone", "").strip()
+        phone = sms.normalize(phone_raw) if phone_raw else ""
+        if phone_raw and not phone:
+            flash("That mobile number doesn't look right. Use 10 digits, like 613-555-0123, or leave it empty.", "error")
+            return render_template("packet_new.html", templates=templates, form=request.form,
+                                   selected=[int(x) for x in request.form.getlist("template_ids") if x.isdigit()])
         ids = [int(x) for x in request.form.getlist("template_ids") if x.isdigit()]
         ids = [i for i in ids if i in {t["id"] for t in templates}]  # only this company's forms
         adhoc = [f for f in request.files.getlist("adhoc_files") if f and f.filename]
@@ -1145,9 +1160,9 @@ def new_packet():
         expires = (datetime.now(timezone.utc) + timedelta(days=days)).replace(microsecond=0).isoformat()
         cur = db().execute(
             "INSERT INTO packets (token, client_name, client_email, message, status, created_at, expires_at, "
-            "created_by, created_by_id, company_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "created_by, created_by_id, company_id, client_phone) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (token, name, email, request.form.get("message", "").strip(), "draft", now(), expires,
-             actor(), g.user["id"], cid()))
+             actor(), g.user["id"], cid(), phone))
         pid = cur.lastrowid
         campaigns.remember_contact(db(), cid(), name, email, g.user["id"])  # clients join the company's client list
         by_id = {t["id"]: t for t in templates}
@@ -1175,6 +1190,8 @@ def new_packet():
             parts.append(f"{len(uploads)} one-off file(s)")
         log_event(pid, "created", ", ".join(parts) + (f" · by {actor()}" if actor() else ""))
         db().commit()
+        if phone and request.form.get("text_link") == "on" and sms.enabled():
+            text_packet(pid)
         if request.form.get("action") == "send_email" and mailer.enabled():
             return send_packet_email(pid)
         mark_sent(pid, "link")
@@ -1199,7 +1216,11 @@ def send_packet_email(pid):
     try:
         mailer.send_request(p["client_email"], p["client_name"], biz(),
                             [i["template_name"] for i in items], signing_url(p["token"]),
-                            p["message"], p["expires_at"], reply_to=(staff_recipients(p) or [None])[0])
+                            p["message"], p["expires_at"], reply_to=(staff_recipients(p) or [None])[0],
+                            brand=extras.brand_of(g.company, BASE_URL or request.url_root.rstrip("/")),
+                            reminder=request.endpoint != "new_packet" and bool(db().execute("SELECT 1 FROM events WHERE packet_id=? AND type='sent' AND detail LIKE 'by %'",
+                                                       (pid,)).fetchone()))
+        db().execute("UPDATE packets SET last_reminder_at=? WHERE id=?", (now(), pid))  # restarts the reminder clock
         mark_sent(pid, "email")
         flash(f"Sent to {p['client_email']}.", "ok")
     except Exception as exc:  # noqa: BLE001
@@ -1612,6 +1633,7 @@ def security_headers(resp):
 
 campaigns.register(__import__("sys").modules[__name__])
 admin_api.register(__import__("sys").modules[__name__])
+extras.register(__import__("sys").modules[__name__])
 
 
 if __name__ == "__main__":

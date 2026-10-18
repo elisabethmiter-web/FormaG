@@ -28,4 +28,39 @@
   <p class="muted small" style="margin:0">Counts your library files, files sent to clients and signed copies.</p>
 </section>
 </div>
+
+<div class="grid-2" style="align-items:start;margin-top:20px">
+<form method="post" action="{{ url_for('company_brand') }}" class="panel stack" id="brand" enctype="multipart/form-data">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <h2>Logo and colour</h2>
+  <p class="muted small" style="margin:0">Your clients see these on the signing pages and in the emails they get from you.</p>
+  {% set b = brand %}
+  <div class="brand-preview" style="{% if b.color %}--accent:{{ b.color }};--accent-ink:{{ b.ink }}{% endif %}">
+    {% if b.logo_url %}<img src="{{ b.logo_url }}" alt="Your logo">{% else %}<strong>{{ c.name }}</strong>{% endif %}
+    <span class="btn btn-primary small" aria-hidden="true">Review and sign</span>
+  </div>
+  <label for="logo">Logo <span class="hint">PNG or JPG, up to 5 MB. A wide logo on a transparent or white background looks best.</span>
+    <input id="logo" type="file" name="logo" accept="image/png,image/jpeg,image/webp"></label>
+  {% if c.logo_file %}<label class="check"><input type="checkbox" name="remove_logo" value="1"> Remove the logo (show the company name instead)</label>{% endif %}
+  <label for="brand_color">Button and link colour
+    <span class="row" style="gap:8px;align-items:center"><input id="brand_color" type="color" name="brand_color" value="{{ c.brand_color or '#24408e' }}" style="width:64px;height:40px;padding:2px">
+    {% if c.brand_color %}<label class="check small"><input type="checkbox" name="reset_color" value="1"> Use the standard blue</label>{% endif %}</span></label>
+  <div><button class="btn btn-primary">Save branding</button></div>
+</form>
+
+<form method="post" action="{{ url_for('company_reminders') }}" class="panel stack" id="reminders">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <h2>Automatic reminders</h2>
+  <p class="muted small" style="margin:0">Clients who haven't finished signing get a friendly reminder{{ ' by email' if email_enabled }}{{ ' and by text (when you add their mobile number)' if sms_enabled }}. Reminders stop as soon as they finish, or when the packet is cancelled or its link expires.</p>
+  {% if not email_enabled and not sms_enabled %}<div class="flash flash-error">Email and texting aren't set up on this server, so reminders can't go out yet.</div>{% endif %}
+  <label class="check"><input type="checkbox" name="reminders_on" {{ 'checked' if c.reminders_on }}> Send automatic reminders</label>
+  <div class="grid-2">
+    <label for="reminder_days">Every <span class="hint">days without signing</span>
+      <input id="reminder_days" type="number" name="reminder_days" min="1" max="14" value="{{ c.reminder_days or 2 }}"></label>
+    <label for="reminder_max">At most <span class="hint">reminders per packet</span>
+      <input id="reminder_max" type="number" name="reminder_max" min="1" max="10" value="{{ c.reminder_max or 3 }}"></label>
+  </div>
+  <div><button class="btn btn-primary">Save reminders</button></div>
+</form>
+</div>
 {% endblock %}

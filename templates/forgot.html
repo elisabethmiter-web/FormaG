@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>{% include "_head.html" %}<title>Forgot password · {{ platform_name }}</title></head>
+<body>
+<main class="login-box">
+  <form class="panel" method="post">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <span class="brand">{% include "_mark.html" %}{{ platform_name }}</span>
+    <div class="stack" style="gap:4px"><h1 style="font-size:1.5rem">Forgot your password?</h1>
+    {% if email_enabled %}<p class="muted small">Enter your work email and we'll send you a link to choose a new password.</p>{% endif %}</div>
+    {% if not email_enabled %}
+    <div class="flash flash-error">Email isn't set up on this server yet, so ask a manager at your company to reset your password from the Team page.</div>
+    {% elif sent %}
+    <div class="flash flash-ok">If {{ email }} has a login, a reset link is on its way. It works for 60 minutes. Check your junk folder if you don't see it.</div>
+    {% else %}
+    <label for="email">Email<input id="email" type="email" name="email" value="{{ email or '' }}" autofocus autocomplete="username" required></label>
+    <button class="btn btn-primary btn-lg">Send reset link</button>
+    {% endif %}
+    <p class="small" style="margin:0"><a href="{{ url_for('login') }}">← Back to sign in</a></p>
+  </form>
+</main>
+</body>
+</html>

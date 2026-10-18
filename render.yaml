@@ -24,3 +24,13 @@ services:
         value: "1"
       - key: BASE_URL
         sync: false
+      - key: SUPPORT_EMAIL         # who companies contact when their free trial ends
+        sync: false
+      - key: TRIAL_DAYS
+        value: "14"
+      - key: TWILIO_ACCOUNT_SID    # optional: text messages
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM
+        sync: false

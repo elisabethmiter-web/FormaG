@@ -39,24 +39,40 @@ def _wrap(inner):
 color:#1d2433;line-height:1.5">{inner}</div>"""
 
 
-def send_request(to, client_name, business, form_names, link, message, expires_at, reply_to=None):
+def _brand_header(business, brand):
+    """The company's logo (or name) at the top of client emails."""
+    brand = brand or {}
+    if brand.get("logo_url"):
+        return (f'<p style="margin:0 0 18px"><img src="{escape(brand["logo_url"])}" alt="{escape(business)}" '
+                f'style="max-width:220px;max-height:70px;height:auto;border:0"></p>')
+    return f'<p style="margin:0 0 18px;font-size:18px;font-weight:bold">{escape(business)}</p>'
+
+
+def send_request(to, client_name, business, form_names, link, message, expires_at, reply_to=None,
+                 brand=None, reminder=False):
     msg = EmailMessage()
-    msg["Subject"] = f"{business}: {len(form_names)} form{'s' if len(form_names) != 1 else ''} to sign"
+    count = f"{len(form_names)} form{'s' if len(form_names) != 1 else ''}"
+    msg["Subject"] = (f"Reminder from {business}: {count} still waiting for your signature" if reminder
+                      else f"{business}: {count} to sign")
     msg["From"] = os.environ["SMTP_FROM"]
     msg["To"] = to
     if reply_to or os.environ.get("ADMIN_EMAIL"):
         msg["Reply-To"] = reply_to or os.environ["ADMIN_EMAIL"]  # replies reach the company, not the platform
     items = "\n".join(f"  • {n}" for n in form_names)
-    note = f"\n{message}\n" if message else ""
+    note = f"\n{message}\n" if message and not reminder else ""
+    intro = (f"Just a friendly reminder: {business} is still waiting for you to review and sign:" if reminder
+             else f"{business} has sent you the following to review and sign:")
+    color = (brand or {}).get("color") or "#24408e"
+    ink = (brand or {}).get("ink") or "#ffffff"
     msg.set_content(
-        f"Hi {client_name},\n{note}\n{business} has sent you the following to review and sign:\n{items}\n\n"
+        f"Hi {client_name},\n{note}\n{intro}\n{items}\n\n"
         f"Open your forms here:\n{link}\n\nThe link works until {expires_at[:10]}.\n")
     lis = "".join(f"<li>{escape(n)}</li>" for n in form_names)
-    note_html = f"<p>{escape(message)}</p>" if message else ""
+    note_html = f"<p>{escape(message)}</p>" if message and not reminder else ""
     msg.add_alternative(_wrap(
-        f"<p>Hi {escape(client_name)},</p>{note_html}"
-        f"<p>{escape(business)} has sent you the following to review and sign:</p><ul>{lis}</ul>"
-        f'<p><a href="{escape(link)}" style="display:inline-block;background:#24408e;color:#fff;'
+        f"{_brand_header(business, brand)}<p>Hi {escape(client_name)},</p>{note_html}"
+        f"<p>{escape(intro)}</p><ul>{lis}</ul>"
+        f'<p><a href="{escape(link)}" style="display:inline-block;background:{escape(color)};color:{escape(ink)};'
         f'padding:12px 20px;border-radius:6px;text-decoration:none">Review and sign</a></p>'
         f"<p style='color:#5b6475;font-size:13px'>The link works until {escape(expires_at[:10])}. "
         f"If the button doesn't work, paste this address into your browser:<br>{escape(link)}</p>"),
@@ -128,3 +144,34 @@ def campaign_message(to, subject, html, text, from_name, reply_to, unsubscribe_u
     msg.set_content(text)
     msg.add_alternative(html, subtype="html")
     return msg
+
+
+# ---------------------------------------------------------------- account emails
+def send_password_reset(to, name, link, platform, minutes):
+    msg = EmailMessage()
+    msg["Subject"] = f"{platform}: reset your password"
+    msg["From"] = os.environ["SMTP_FROM"]
+    msg["To"] = to
+    msg.set_content(f"Hi {name},\n\nSomeone (hopefully you) asked to reset your {platform} password.\n"
+                    f"Choose a new one here within {minutes} minutes:\n{link}\n\n"
+                    f"If you didn't ask for this, ignore this email. Your password stays the same.\n")
+    msg.add_alternative(_wrap(
+        f"<p>Hi {escape(name)},</p><p>Someone (hopefully you) asked to reset your {escape(platform)} password.</p>"
+        f'<p><a href="{escape(link)}" style="display:inline-block;background:#24408e;color:#fff;padding:12px 20px;'
+        f'border-radius:6px;text-decoration:none">Choose a new password</a></p>'
+        f"<p style='color:#5b6475;font-size:13px'>The link works for {minutes} minutes and only once. If you didn't "
+        f"ask for this, ignore this email; your password stays the same.</p>"), subtype="html")
+    _send(msg)
+
+
+def send_notice(to, subject, paragraphs, reply_to=None):
+    """A short plain notice (trial ending, trial ended...)."""
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = os.environ["SMTP_FROM"]
+    msg["To"] = to
+    if reply_to:
+        msg["Reply-To"] = reply_to
+    msg.set_content("\n\n".join(paragraphs) + "\n")
+    msg.add_alternative(_wrap("".join(f"<p>{escape(p)}</p>" for p in paragraphs)), subtype="html")
+    _send(msg)

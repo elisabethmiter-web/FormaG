@@ -30,6 +30,16 @@
   <form method="post" action="{{ url_for('platform_exit') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn btn-quiet small">Back to all companies</button></form>
 </div></div>
 {% endif %}
+{% if storage_temporary and current_user and (current_user.id == 0 or is_manager) %}
+<div class="alert-bar alert-bad" role="alert"><div class="topbar-inner">
+  <span><strong>Your data isn't being saved permanently.</strong> This server stores everything on temporary storage, so companies, packets and signed copies are erased whenever it restarts. {% if current_user.id == 0 %}On Render, add a persistent disk to this service (mount path <code>/var/data</code>) and set <code>DATA_DIR</code> to <code>/var/data</code>.{% else %}Contact {{ support_email or platform_name }} right away.{% endif %}</span>
+</div></div>
+{% endif %}
+{% if trial_days_left is not none and in_company and is_manager %}
+<div class="alert-bar {{ 'alert-warn' if trial_days_left <= 3 else 'alert-info' }}"><div class="topbar-inner">
+  <span><strong>Free trial: {{ trial_days_left }} day{{ 's' if trial_days_left != 1 }} left.</strong> The account pauses on its own when the trial ends{% if support_email %}. To keep using {{ platform_name }}, contact <a href="mailto:{{ support_email }}">{{ support_email }}</a>{% endif %}. Nothing is deleted.</span>
+</div></div>
+{% endif %}
 <main class="wrap {% block wrapclass %}{% endblock %}">
 {% include "_flash.html" %}
 {% block content %}{% endblock %}

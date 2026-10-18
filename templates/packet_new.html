@@ -9,6 +9,7 @@
   <div class="grid-2">
     <label for="client_name">Client name<input id="client_name" type="text" name="client_name" value="{{ form.get('client_name','') }}" required></label>
     <label for="client_email">Client email<input id="client_email" type="email" name="client_email" value="{{ form.get('client_email','') }}" required></label>
+    <label for="client_phone">Client mobile <span class="hint">Optional. For text messages{{ '' if sms_enabled else ' (when texting is set up)' }}</span><input id="client_phone" type="tel" name="client_phone" value="{{ form.get('client_phone','') }}" placeholder="613-555-0123" autocomplete="off"></label>
   </div>
   <fieldset class="stack" style="border:0;padding:0;margin:0;gap:8px">
     <legend style="font-weight:500;margin-bottom:8px">Forms to include</legend>
@@ -35,6 +36,7 @@
   <label for="expiry_days" style="max-width:260px">Link expires after
     <select id="expiry_days" name="expiry_days">{% for d in (7,14,30,60,90) %}<option value="{{ d }}" {{ 'selected' if d==30 }}>{{ d }} days</option>{% endfor %}</select></label>
   <div class="row">
+    {% if sms_enabled %}<label class="check" style="flex-basis:100%"><input type="checkbox" name="text_link" {{ 'checked' if form.get('text_link') }}> Also text the signing link to the client's mobile</label>{% endif %}
     {% if email_enabled %}<button class="btn btn-primary btn-lg" name="action" value="send_email">Email to client</button>
     <button class="btn btn-lg" name="action" value="link">Create link only</button>
     {% else %}<button class="btn btn-primary btn-lg" name="action" value="link">Create signing link</button>

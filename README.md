@@ -35,6 +35,32 @@ Each company that uses FormSign gets its **own account**: its own managers and s
 - **Sign-in**: everyone signs in with their email and password. The email decides which company they belong to, so each email can only have one login.
 - **Upgrading** from the single-company version: on first start, everything already in the database becomes one company named after your old `BUSINESS_NAME` setting. Nothing else changes for those users.
 
+## Free trial (pauses on its own)
+
+Companies that sign up themselves get a free trial (`TRIAL_DAYS`, default 14). Managers see how many days are left at the top of every page, and get an email 3 days before the end. When the trial ends, the company **pauses on its own**: its team is signed out and can't sign in, and the sign-in page tells them to contact `SUPPORT_EMAIL`. Nothing is deleted, and signing links already sent to clients keep working. You also get an email (`ADMIN_EMAIL`) naming the company.
+
+To keep a company on, click **Mark as paid** (on the Companies screen or in the Admin Console). **+7 days trial** gives more time. Turning a paused, ended trial back on also marks it as paid. Companies you add yourself, and companies that existed before this version, are already marked as paid.
+
+## Automatic reminders
+
+Clients who haven't finished signing get a friendly reminder by email (and by text when their mobile number is on the packet and texting is set up). Each company sets the schedule under **Company → Automatic reminders** (default: every 2 days, at most 3). Reminders stop when the client finishes, or the packet is cancelled or its link expires. Sending a reminder by hand restarts the clock. Each reminder appears in the packet's Activity list. A reminder that fails to send doesn't count and is tried again later.
+
+## Logo and colour
+
+Managers upload their logo and choose a colour under **Company → Logo and colour**. Clients see them on the signing pages and in the emails they receive.
+
+## Text messages (optional)
+
+With a [Twilio](https://www.twilio.com) account, staff can text the signing link (a box on the New packet page, or **Text the link** on a packet), and reminders also go by text. Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_FROM` (your Twilio number, like `+16135550100`, or a Messaging Service id starting with MG). A text costs about 1¢ in Canada and the US. Twilio handles replies of STOP automatically.
+
+## Forgot password
+
+With email turned on, the sign-in page has a **Forgot your password?** link. It emails a one-time link that works for 60 minutes. Managers can still set temporary passwords from the Team page.
+
+## Storage warning
+
+If the app runs on Render without a persistent disk, everything is erased on every restart. The app detects this and shows a red warning to you and to managers, and in the Admin Console. Fix it by adding a disk (mount path `/var/data`) and setting `DATA_DIR` to `/var/data`.
+
 ## Admin Console (optional)
 
 If you run more than one FormSign app, the separate **FormSign Admin Console** shows every company from every app in one place and opens any company with one click. To connect this app to it, set `ADMIN_API_TOKEN` to a long random value (different for each app) and enter the same value in the console. Without that setting the admin API is off. See the Admin Console's README.
@@ -131,6 +157,11 @@ With email on, you can send packets and reminders from the app, and the client, 
 | `ALLOW_SIGNUP` | no | `1` lets companies create their own account (default), `0` means only you add them |
 | `INCLUDED_STORAGE_GB` | no | Storage included for each new company (default 25) |
 | `ADMIN_API_TOKEN` | no | Turns on the private API used by the Admin Console (long random value) |
+| `TRIAL_DAYS` | no | Length of the free trial for companies that sign up themselves (default 14) |
+| `SUPPORT_EMAIL` | recommended | Who companies contact to keep using the app after the trial (for example liz@helmmsp.ca) |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM` | no | Turn on text messages |
+| `REMINDER_CHECK_SECONDS` | no | How often the app checks for reminders and ended trials (default 300) |
+| `STORAGE_CHECK` | no | `0` hides the storage warning; `1` checks even off Render |
 | `CAMPAIGN_DAILY_LIMIT` | no | Campaign emails each company may send per 24 hours (default 2000) |
 | `CAMPAIGN_PER_MINUTE` | no | Sending speed for campaigns (default 120 per minute) |
 | `BUSINESS_NAME` | no | Only used when upgrading: names the first company |
@@ -153,5 +184,4 @@ With email on, you can send packets and reminders from the app, and the client, 
 
 - Place the signature on a specific spot on the PDF page instead of a certificate page
 - Multiple signers per packet (e.g. two company directors), signing order
-- Automatic reminder emails after N days
 - Client-uploaded attachments (ID, documents)

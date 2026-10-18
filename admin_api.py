@@ -16,6 +16,8 @@ from functools import wraps
 from flask import abort, flash, jsonify, redirect, request, session, url_for
 from werkzeug.security import generate_password_hash
 
+import extras
+
 TOKEN = os.environ.get("ADMIN_API_TOKEN", "")
 SSO_SECONDS = 60
 
@@ -91,6 +93,8 @@ def register(A):
         return {"id": c["id"], "name": c["name"], "status": c["status"], "notify_email": c.get("notify_email") or "",
                 "mailing_address": c.get("mailing_address") or "", "storage_gb": c["storage_gb"],
                 "source": c.get("source") or "", "created_at": c["created_at"], "admin_notes": c.get("admin_notes") or "",
+                "plan": c.get("plan") or "paid", "trial_ends_at": c.get("trial_ends_at"),
+                "trial_days_left": extras.trial_days_left(c), "paused_reason": c.get("paused_reason") or "",
                 **stats(c["id"])}
 
     @app.route("/api/admin/summary")
@@ -98,6 +102,7 @@ def register(A):
     def admin_api_summary():
         rows = db().execute("SELECT * FROM companies ORDER BY name COLLATE NOCASE").fetchall()
         return jsonify({"app": A.PLATFORM_NAME, "time": A.now(), "sign_within_hours": A.SIGN_WITHIN_HOURS,
+                        "storage_temporary": bool(getattr(A, "STORAGE_TEMPORARY", False)), "trial_days": extras.TRIAL_DAYS,
                         "companies": [company_json(r) for r in rows]})
 
     @app.route("/api/admin/companies/<int:cid>")
@@ -145,8 +150,15 @@ def register(A):
         db().execute("SELECT 1 FROM companies WHERE id=?", (cid,)).fetchone() or abort(404)
         data = request.get_json(silent=True) or {}
         action = data.get("action")
+        if action in ("mark_paid", "extend_trial"):
+            msg = extras.owner_action(db(), cid, action, data.get("days"))
+            db().commit()
+            return jsonify({"ok": True, "message": msg})
         if action in ("suspend", "activate"):
+            msg = extras.owner_action(db(), cid, action)
             db().execute("UPDATE companies SET status=? WHERE id=?", ("suspended" if action == "suspend" else "active", cid))
+            db().commit()
+            return jsonify({"ok": True, "message": msg})
         elif action == "storage":
             gb = num(data.get("storage_gb"))
             if not 1 <= gb <= 100000:
