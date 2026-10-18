@@ -35,6 +35,10 @@ Each company that uses FormSign gets its **own account**: its own managers and s
 - **Sign-in**: everyone signs in with their email and password. The email decides which company they belong to, so each email can only have one login.
 - **Upgrading** from the single-company version: on first start, everything already in the database becomes one company named after your old `BUSINESS_NAME` setting. Nothing else changes for those users.
 
+## Admin Console (optional)
+
+If you run more than one FormSign app, the separate **FormSign Admin Console** shows every company from every app in one place and opens any company with one click. To connect this app to it, set `ADMIN_API_TOKEN` to a long random value (different for each app) and enter the same value in the console. Without that setting the admin API is off. See the Admin Console's README.
+
 ## Email campaigns (mass email to your client list)
 
 The **Email** tab lets a company send one email to its whole client list, or to a group.
@@ -126,6 +130,7 @@ With email on, you can send packets and reminders from the app, and the client, 
 | `PLATFORM_NAME` | no | Your service's name on the sign-in and sign-up pages (default FormSign) |
 | `ALLOW_SIGNUP` | no | `1` lets companies create their own account (default), `0` means only you add them |
 | `INCLUDED_STORAGE_GB` | no | Storage included for each new company (default 25) |
+| `ADMIN_API_TOKEN` | no | Turns on the private API used by the Admin Console (long random value) |
 | `CAMPAIGN_DAILY_LIMIT` | no | Campaign emails each company may send per 24 hours (default 2000) |
 | `CAMPAIGN_PER_MINUTE` | no | Sending speed for campaigns (default 120 per minute) |
 | `BUSINESS_NAME` | no | Only used when upgrading: names the first company |
@@ -135,6 +140,7 @@ With email on, you can send packets and reminders from the app, and the client, 
 
 ## How it works
 
+- `admin_api.py`: private API for the Admin Console (company stats, pause, storage, one-time sign-in links).
 - `campaigns.py`: client lists, CSV/Excel import, campaign writing, background sending, unsubscribe and open tracking.
 - `app.py`: Flask routes for the admin side (`/`, `/library`, `/packets/...`) and the client side (`/s/<token>/...`).
 - `pdfgen.py`: builds signed PDFs and audit trails with pypdf and ReportLab.

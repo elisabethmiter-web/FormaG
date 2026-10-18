@@ -25,6 +25,7 @@ from flask import (Flask, abort, flash, g, redirect, render_template, request,
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
+import admin_api
 import campaigns
 import mailer
 import pdfgen
@@ -239,6 +240,7 @@ def _init_db_locked():
     conn.execute("UPDATE packets SET created_by_id = COALESCE((SELECT u.id FROM users u WHERE u.name = "
                  "packets.created_by COLLATE NOCASE ORDER BY u.id LIMIT 1), 0) WHERE created_by_id IS NULL")
     campaigns.init_db(conn)  # client lists and email campaigns
+    admin_api.init_db(conn)  # Admin Console links
     conn.commit()
     conn.close()
 
@@ -372,7 +374,7 @@ def csrf_token():
 
 @app.before_request
 def check_csrf():
-    if request.method == "POST" and not request.path.startswith("/u/"):  # /u/ = one-click unsubscribe from email apps
+    if request.method == "POST" and not request.path.startswith(("/u/", "/api/admin/")):  # admin API uses its own token  # /u/ = one-click unsubscribe from email apps
         sent = request.form.get("csrf") or request.headers.get("X-CSRF-Token", "")
         if not sent or not hmac.compare_digest(sent, session.get("csrf", "")):
             abort(400, "Your session expired. Reload the page and try again.")
@@ -1609,6 +1611,7 @@ def security_headers(resp):
 
 
 campaigns.register(__import__("sys").modules[__name__])
+admin_api.register(__import__("sys").modules[__name__])
 
 
 if __name__ == "__main__":
