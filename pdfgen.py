@@ -126,7 +126,7 @@ def _certificate(meta, sig_path):
         ("Document", meta["form_name"]),
         ("Signed by", meta["signer_name"] if meta["signer_name"].strip().lower() == meta["client_name"].strip().lower()
          else f"{meta['signer_name']} (on behalf of {meta['client_name']})"),
-        ("Client email", meta["client_email"]),
+        ("Client email", meta["client_email"] or "—"),
         ("Signed on", _when(meta["signed_at"])),
         ("IP address", meta.get("ip") or "—"),
         ("Device", meta.get("user_agent") or "—"),
@@ -423,7 +423,7 @@ def audit_trail(out_path, business, packet, items, events):
     meta = {"business": business, "packet_ref": ref, "form_name": f"Audit trail {ref}"}
     story = [_p("Audit trail", H1), _p(f"{business} · Confirmation {ref}", SMALL), Spacer(1, 10),
              _p("Packet", H2)]
-    info = [("Client", f"{packet['client_name']} <{packet['client_email']}>"),
+    info = [("Client", f"{packet['client_name']} <{packet['client_email']}>" if packet['client_email'] else packet['client_name']),
             ("Created", _when(packet["created_at"])), ("Sent", _when(packet["sent_at"])),
             ("First opened", _when(packet["first_viewed_at"])),
             ("Completed", _when(packet["completed_at"]) or "Not yet")]

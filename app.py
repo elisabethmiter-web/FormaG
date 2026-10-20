@@ -26,11 +26,9 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
 import admin_api
-import campaigns
 import extras
 import workflow
 import sms
-import mailer
 import pdfgen
 import seal
 import preview
@@ -243,7 +241,6 @@ def _init_db_locked():
     # Older packets only stored the creator's name: link them to that login, or to the owner if none matches.
     conn.execute("UPDATE packets SET created_by_id = COALESCE((SELECT u.id FROM users u WHERE u.name = "
                  "packets.created_by COLLATE NOCASE ORDER BY u.id LIMIT 1), 0) WHERE created_by_id IS NULL")
-    campaigns.init_db(conn)  # client lists and email campaigns
     admin_api.init_db(conn)  # Admin Console links
     extras.init_db(conn)  # trial, branding, reminders, texts, password resets
     workflow.init_db(conn)  # second owners, client files, bundles, signature boxes
@@ -367,8 +364,7 @@ def get_company(company_id):
 
 @app.context_processor
 def inject_globals():
-    return {"business_name": biz(), "platform_name": PLATFORM_NAME, "csrf_token": csrf_token,
-            "email_enabled": mailer.enabled()}
+    return {"business_name": biz(), "platform_name": PLATFORM_NAME, "csrf_token": csrf_token}
 
 
 # ---------------------------------------------------------------- auth + csrf
@@ -380,7 +376,7 @@ def csrf_token():
 
 @app.before_request
 def check_csrf():
-    if request.method == "POST" and not request.path.startswith(("/u/", "/api/admin/")):  # admin API uses its own token  # /u/ = one-click unsubscribe from email apps
+    if request.method == "POST" and not request.path.startswith("/api/admin/"):  # admin API uses its own token  # /u/ = one-click unsubscribe from email apps
         sent = request.form.get("csrf") or request.headers.get("X-CSRF-Token", "")
         if not sent or not hmac.compare_digest(sent, session.get("csrf", "")):
             abort(400, "Your session expired. Reload the page and try again.")
@@ -739,15 +735,10 @@ def fmt_gb(n):
 def company_settings():
     if request.method == "POST":
         name = request.form.get("name", "").strip()[:100]
-        notify = request.form.get("notify_email", "").strip()[:120]
-        address = request.form.get("mailing_address", "").strip()[:300]
         if not name:
             flash("Your company name can't be empty. Clients see it on every packet.", "error")
-        elif notify and "@" not in notify:
-            flash("Enter a valid notification email, or leave it empty.", "error")
         else:
-            db().execute("UPDATE companies SET name=?, notify_email=?, mailing_address=? WHERE id=?",
-                         (name, notify, address, cid()))
+            db().execute("UPDATE companies SET name=? WHERE id=?", (name, cid()))
             db().commit()
             flash("Company details saved.", "ok")
             return redirect(url_for("company_settings"))
@@ -1152,9 +1143,9 @@ def new_packet():
             return render_template("packet_new.html", templates=templates, form=request.form, selected=ids)
         adhoc = [f for f in request.files.getlist("adhoc_files") if f and f.filename]
         in_person = request.form.get("action") == "in_person"
-        email_ok = "@" in email or (in_person and not email)   # no email needed when they sign here, now
+        email_ok = not email or "@" in email   # optional, kept for the record
         if not name or not email_ok or not (ids or adhoc):
-            flash("Add the client's name, a valid email, and at least one form or file.", "error")
+            flash("Add the client's name and at least one form or file (and check the email address, if you entered one).", "error")
             return render_template("packet_new.html", templates=templates, form=request.form,
                                    selected=ids)
         uploads = []
@@ -1175,7 +1166,6 @@ def new_packet():
             (token, name, email, request.form.get("message", "").strip(), "draft", now(), expires,
              actor(), g.user["id"], cid(), phone))
         pid = cur.lastrowid
-        campaigns.remember_contact(db(), cid(), name, email, g.user["id"])  # clients join the company's client list
         by_id = {t["id"]: t for t in templates}
         for pos, tid in enumerate(ids):
             t = by_id.get(tid)
@@ -1206,8 +1196,6 @@ def new_packet():
             return start_in_person(pid)
         if phone and request.form.get("text_link") == "on" and sms.enabled():
             text_packet(pid)
-        if request.form.get("action") == "send_email" and mailer.enabled():
-            return send_packet_email(pid)
         mark_sent(pid, "link")
         flash("Packet ready. Copy the signing link below and send it to your client.", "ok")
         return redirect(url_for("packet_detail", pid=pid))
@@ -1222,29 +1210,6 @@ def mark_sent(pid, how):
         db().execute("UPDATE packets SET status='sent', sent_at=? WHERE id=?", (now(), pid))
     log_event(pid, "sent", "by email" if how == "email" else "link created")
     db().commit()
-
-
-def send_packet_email(pid):
-    p = db().execute("SELECT * FROM packets WHERE id=?", (pid,)).fetchone()
-    items = db().execute("SELECT template_name FROM packet_items WHERE packet_id=? ORDER BY position",
-                         (pid,)).fetchall()
-    try:
-        mailer.send_request(p["client_email"], p["client_name"], biz(),
-                            [i["template_name"] for i in items], signing_url(p["token"]),
-                            p["message"], p["expires_at"], reply_to=(staff_recipients(p) or [None])[0],
-                            brand=extras.brand_of(g.company, BASE_URL or request.url_root.rstrip("/")),
-                            reminder=request.endpoint != "new_packet" and bool(db().execute("SELECT 1 FROM events WHERE packet_id=? AND type='sent' AND detail LIKE 'by %'",
-                                                       (pid,)).fetchone()))
-        db().execute("UPDATE packets SET last_reminder_at=? WHERE id=?", (now(), pid))  # restarts the reminder clock
-        mark_sent(pid, "email")
-        flash(f"Sent to {p['client_email']}.", "ok")
-        notify_cosigners(pid, "email")
-    except Exception as exc:  # noqa: BLE001
-        log_event(pid, "email_failed", str(exc)[:200])
-        db().commit()
-        flash(f"The email didn't go out ({exc}). You can still copy the link below.", "error")
-        mark_sent(pid, "link")
-    return redirect(url_for("packet_detail", pid=pid))
 
 
 @app.route("/packets/<int:pid>")
@@ -1290,25 +1255,6 @@ def save_followups(pid):
     db().commit()
     flash("Follow-ups saved." if changes else "No changes to save.", "ok")
     return redirect(url_for("packet_detail", pid=pid) + "#followups")
-
-
-@app.route("/packets/<int:pid>/email", methods=["POST"])
-@login_required
-def email_packet(pid):
-    if not mailer.enabled():
-        flash("Email isn't set up yet. Add the SMTP settings to turn it on.", "error")
-        return redirect(url_for("packet_detail", pid=pid))
-    return send_packet_email(pid)
-
-
-@app.route("/packets/<int:pid>/remind", methods=["POST"])
-@login_required
-def remind_packet(pid):
-    if mailer.enabled():
-        return send_packet_email(pid)
-    log_event(pid, "reminder", "copied link")
-    db().commit()
-    return redirect(url_for("packet_detail", pid=pid))
 
 
 @app.route("/packets/<int:pid>/extend", methods=["POST"])
@@ -1543,45 +1489,11 @@ def packet_ref(p):
 app.jinja_env.globals["packet_ref"] = packet_ref
 
 
-def staff_recipients(p):
-    """Who at the company hears that a packet is complete: its sender and the company's notification email."""
-    out = []
-    sender = db().execute("SELECT email FROM users WHERE id=? AND active=1 AND company_id=?",
-                          (p["created_by_id"] or -1, p["company_id"])).fetchone()
-    company = get_company(p["company_id"])
-    for e in (sender["email"] if sender else "", company["notify_email"] if company else ""):
-        if e and "@" in e and e.lower() not in [o.lower() for o in out]:
-            out.append(e)
-    return out or [a for a in [mailer.admin_email()] if a]
-
-
 def complete_packet(pid, reason="all forms signed"):
     db().execute("UPDATE packets SET status='completed', completed_at=? WHERE id=? AND completed_at IS NULL",
                  (now(), pid))
     log_event(pid, "completed", reason)
     db().commit()
-    if mailer.enabled():
-        p = db().execute("SELECT * FROM packets WHERE id=?", (pid,)).fetchone()
-        items = db().execute("SELECT * FROM packet_items WHERE packet_id=? ORDER BY position", (pid,)).fetchall()
-        files = [(f"{secure_filename(i['template_name'])}-signed.pdf", os.path.join(SIGNED_DIR, i["signed_pdf_path"]))
-                 for i in items if i["signed_pdf_path"]]
-        # Non-PDF originals (Word, Excel, images...) go along so everyone has the actual files.
-        files += [(i["file_name"], os.path.join(UPLOAD_DIR, i["template_file"])) for i in items
-                  if i["template_kind"] == "file" or (not i["requires_signature"] and i["template_file"])]
-        try:
-            if "@" in (p["client_email"] or ""):
-                mailer.send_completed(p["client_email"], p["client_name"], biz(), packet_ref(p), files,
-                                      admin_link=None)
-            for cs in db().execute("SELECT name, email FROM packet_signers WHERE packet_id=?", (pid,)).fetchall():
-                if "@" in (cs["email"] or ""):
-                    mailer.send_completed(cs["email"], cs["name"], biz(), packet_ref(p), files, admin_link=None)
-            for to in staff_recipients(p):
-                mailer.send_completed(to, p["client_name"], biz(), packet_ref(p), files,
-                                      admin_link=(BASE_URL or "") + url_for("packet_detail", pid=pid))
-            log_event(pid, "receipt_emailed", "client and owner")
-        except Exception as exc:  # noqa: BLE001
-            log_event(pid, "email_failed", str(exc)[:200])
-        db().commit()
 
 
 @app.route("/s/<token>/done")
@@ -1675,7 +1587,6 @@ def security_headers(resp):
     return resp
 
 
-campaigns.register(__import__("sys").modules[__name__])
 admin_api.register(__import__("sys").modules[__name__])
 extras.register(__import__("sys").modules[__name__])
 workflow.register(__import__("sys").modules[__name__])

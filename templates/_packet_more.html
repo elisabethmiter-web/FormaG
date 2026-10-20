@@ -14,11 +14,10 @@
     <div class="linkbox"><input type="text" readonly value="{{ s.link }}" aria-label="{{ s.name }}'s signing link" id="cos-link-{{ s.id }}">
       <button class="btn" type="button" onclick="navigator.clipboard.writeText(document.getElementById('cos-link-{{ s.id }}').value);this.textContent='Copied';setTimeout(()=>this.textContent='Copy link',1800)">Copy link</button></div>
     <div class="row">
-      {% if email_enabled and s.email %}<form method="post" action="{{ url_for('cosigner_send', pid=p.id, sid=s.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="via" value="email"><button class="btn">Email {{ s.name.split(' ')[0] }}</button></form>{% endif %}
       {% if sms_enabled and s.phone %}<form method="post" action="{{ url_for('cosigner_send', pid=p.id, sid=s.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="via" value="text"><button class="btn">Text {{ s.name.split(' ')[0] }}</button></form>{% endif %}
       <form method="post" action="{{ url_for('in_person', pid=p.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="who" value="{{ s.id }}"><button class="btn btn-quiet">{{ s.name.split(' ')[0] }} signs on this device</button></form>
     </div>
-    <details><summary class="small muted" style="cursor:pointer">Change {{ s.name.split(' ')[0] }}'s email or mobile</summary>
+    <details><summary class="small muted" style="cursor:pointer">Change {{ s.name.split(' ')[0] }}'s mobile number</summary>
       <form method="post" action="{{ url_for('cosigner_edit', pid=p.id, sid=s.id) }}" class="row" style="gap:8px;margin-top:8px;align-items:flex-end">
         <input type="hidden" name="csrf" value="{{ csrf_token() }}">
         <label style="flex:1;min-width:180px">Email<input type="email" name="email" value="{{ s.email }}"></label>

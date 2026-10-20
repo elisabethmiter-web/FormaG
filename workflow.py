@@ -205,25 +205,11 @@ def register(A):
     A.maybe_complete = maybe_complete
 
     # ------------------------------------------------ sending to the second owner
-    def notify_cosigner(p, s, via=("email", "text"), turn=False, quiet=True):
-        """Email and/or text the second owner their own link. Returns the channels used."""
+    def notify_cosigner(p, s, via=("text",), turn=False, quiet=True):
+        """Text the second owner their own link (when texting is set up). Returns the channels used."""
         company = A.get_company(p["company_id"])
         link = cosign_url(s["token"])
-        names = [i["template_name"] for i in sign_items(p["id"])]
         used = []
-        if "email" in via and A.mailer.enabled() and "@" in (s["email"] or ""):
-            try:
-                msg = p["message"] or ""
-                if turn:
-                    msg = f"{first_name(p['client_name'])} has signed. It's your turn to sign as the second owner."
-                A.mailer.send_request(s["email"], s["name"], company["name"], names, link, msg, p["expires_at"],
-                                      reply_to=(A.staff_recipients(p) or [None])[0],
-                                      brand=A.extras.brand_of(company, A.BASE_URL or request.url_root.rstrip("/")))
-                used.append("email")
-            except Exception as exc:  # noqa: BLE001
-                A.log_event(p["id"], "email_failed", f"to {s['name']}: {str(exc)[:160]}")
-                if not quiet:
-                    flash(f"The email to {s['name']} didn't go out ({exc}).", "error")
         if "text" in via and sms.enabled() and s["phone"]:
             try:
                 body = (f"{company['name']}: Hi {first_name(s['name'])}, "
@@ -237,8 +223,7 @@ def register(A):
         if used:
             db().execute("UPDATE packet_signers SET sent_at=COALESCE(sent_at, ?), last_reminder_at=? WHERE id=?",
                          (A.now(), A.now(), s["id"]))
-            A.log_event(p["id"], "sent", f"{'turn notice' if turn else 'link'} to {s['name']} (second owner) by "
-                                         f"{' and '.join(used)}")
+            A.log_event(p["id"], "sent", f"{'turn notice' if turn else 'link'} to {s['name']} (second owner) by text")
         db().commit()
         return used
 
@@ -263,8 +248,6 @@ def register(A):
                 return "The second owner's email doesn't look right."
             if phone and not sms.normalize(phone):
                 return "The second owner's mobile number doesn't look right. Use 10 digits, like 613-555-0123."
-            if not email and not phone and form.get("action") != "in_person":
-                return "Add the second owner's email (or mobile number) so they get their own link."
             if email and email.lower() == form.get("client_email", "").strip().lower():
                 return "Each owner needs their own email address, so each gets their own signing link."
         if form.get("ask_files") == "on" and not form.get("upload_request", "").strip():
@@ -468,13 +451,10 @@ def register(A):
     def cosigner_send(pid, sid):
         p = db().execute("SELECT * FROM packets WHERE id=?", (pid,)).fetchone()
         s = db().execute("SELECT * FROM packet_signers WHERE id=? AND packet_id=?", (sid, pid)).fetchone() or abort(404)
-        via = request.form.get("via", "email")
-        used = notify_cosigner(p, dict(s), via=(via,), quiet=False)
+        used = notify_cosigner(p, dict(s), via=("text",), quiet=False)
         if used:
-            flash(f"{'Emailed' if via == 'email' else 'Texted'} {s['name']} their signing link.", "ok")
-        elif via == "email" and not (A.mailer.enabled() and "@" in (s["email"] or "")):
-            flash(f"Add an email for {s['name']} (or turn on email) first. You can also copy their link.", "error")
-        elif via == "text" and not (sms.enabled() and s["phone"]):
+            flash(f"Texted {s['name']} their signing link.", "ok")
+        elif not (sms.enabled() and s["phone"]):
             flash(f"Add a mobile number for {s['name']} (or turn on texting) first.", "error")
         return redirect(url_for("packet_detail", pid=pid) + "#owners")
 
@@ -828,14 +808,16 @@ def register(A):
 
     # ------------------------------------------------ reminders for second owners
     def run_cosigner_reminders(conn):
-        if not (A.mailer.enabled() or sms.enabled()):
+        """Text second owners who have forms waiting for them, on their company's schedule."""
+        if not sms.enabled():
             return 0
         nowdt = datetime.now(timezone.utc).replace(microsecond=0)
         done = 0
         rows = conn.execute(
-            "SELECT s.*, c.reminder_days, c.reminder_max FROM packet_signers s JOIN packets p ON p.id=s.packet_id "
-            "JOIN companies c ON c.id=p.company_id WHERE c.status='active' AND c.reminders_on=1 AND s.completed_at IS NULL "
-            "AND p.completed_at IS NULL AND p.voided_at IS NULL AND p.expires_at > ? AND s.sent_at IS NOT NULL "
+            "SELECT s.*, c.reminder_days, c.reminder_max, c.name AS company_name FROM packet_signers s "
+            "JOIN packets p ON p.id=s.packet_id JOIN companies c ON c.id=p.company_id WHERE c.status='active' "
+            "AND c.reminders_on=1 AND s.completed_at IS NULL AND p.completed_at IS NULL AND p.voided_at IS NULL "
+            "AND p.expires_at > ? AND s.sent_at IS NOT NULL AND COALESCE(s.phone,'') != '' "
             "AND COALESCE(s.reminder_count,0) < c.reminder_max", (nowdt.isoformat(),)).fetchall()
         for s in rows:
             last_raw = s["last_reminder_at"] or s["sent_at"]
@@ -855,35 +837,15 @@ def register(A):
             conn.commit()
             if not n:
                 continue
-            p = conn.execute("SELECT * FROM packets WHERE id=?", (s["packet_id"],)).fetchone()
-            company = A.get_company(p["company_id"])
-            g.company = company
             base = A.BASE_URL or getattr(A, "BACKGROUND_BASE", "")
-            link = f"{base}/c/{s['token']}"
-            names = [r[0] for r in conn.execute("SELECT template_name FROM packet_items WHERE packet_id=? AND "
-                                                "requires_signature=1 ORDER BY position", (p["id"],))]
-            how = []
-            if A.mailer.enabled() and "@" in (s["email"] or ""):
-                try:
-                    A.mailer.send_request(s["email"], s["name"], company["name"], names, link, "", p["expires_at"],
-                                          reply_to=(A.staff_recipients(p) or [None])[0],
-                                          brand=A.extras.brand_of(company, base), reminder=True)
-                    how.append("email")
-                except Exception:  # noqa: BLE001
-                    pass
-            if sms.enabled() and s["phone"]:
-                try:
-                    sms.send(s["phone"], f"{company['name']}: Hi {first_name(s['name'])}, a reminder that your forms are "
-                                         f"waiting for your signature: {link}")
-                    how.append("text")
-                except RuntimeError:
-                    pass
-            if how:
+            try:
+                sms.send(s["phone"], f"{s['company_name']}: Hi {first_name(s['name'])}, a reminder that your forms are "
+                                     f"waiting for your signature: {base}/c/{s['token']}")
                 conn.execute("INSERT INTO events (packet_id, type, detail, ip, at) VALUES (?,?,?,?,?)",
-                             (p["id"], "reminder", f"automatic reminder to {s['name']} (second owner) by "
-                                                   f"{' and '.join(how)}", "", A.now()))
+                             (s["packet_id"], "reminder", f"automatic reminder to {s['name']} (second owner) by text", "",
+                              A.now()))
                 done += 1
-            else:
+            except RuntimeError:
                 conn.execute("UPDATE packet_signers SET reminder_count=MAX(reminder_count-1,0) WHERE id=?", (s["id"],))
             conn.commit()
         return done

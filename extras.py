@@ -1,15 +1,13 @@
 """Account and client-contact features:
 
 * storage check     warns the owner and managers when the server saves data to temporary storage
-* forgot password   a one-time email link (60 minutes) to choose a new password
-* auto reminders    emails (and texts) clients who haven't finished signing, on each company's schedule
-* branding          each company's logo and colour on client signing pages and client emails
+* auto reminders    texts clients who haven't finished signing, on each company's schedule (needs Twilio)
+* branding          each company's logo and colour on the client signing pages
 * text messages     send the signing link and reminders by SMS through Twilio (see sms.py)
 * 14-day demo       companies that sign up themselves (and companies the owner starts as a demo) get TRIAL_DAYS
                     days; the account locks on its own when the demo ends, until the platform owner gives it
                     another 14 days or marks it as paid
 """
-import hashlib
 import io
 import os
 import re
@@ -19,25 +17,15 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from flask import abort, flash, g, redirect, render_template, request, send_file, session, url_for
-from werkzeug.security import generate_password_hash
 
 import sms
 
 TRIAL_DAYS = int(os.environ.get("TRIAL_DAYS", "14"))
-TRIAL_WARN_DAYS = 3
 SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL") or os.environ.get("ADMIN_EMAIL", "")
 CHECK_SECONDS = max(30, int(os.environ.get("REMINDER_CHECK_SECONDS", "300")))
-RESET_MINUTES = 60
 HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS password_resets (
-  token_hash TEXT PRIMARY KEY,
-  user_id INTEGER NOT NULL,
-  created_at TEXT NOT NULL,
-  expires_at TEXT NOT NULL,
-  used_at TEXT
-);
 """
 COMPANY_COLS = {
     "plan": "TEXT DEFAULT 'paid'",          # 'trial' or 'paid'; companies that existed before stay 'paid'
@@ -186,10 +174,6 @@ def register(A):
         conn.execute("INSERT INTO events (packet_id, type, detail, ip, at) VALUES (?,?,?,?,?)",
                      (pid, type_, detail, "", A.now()))
 
-    def managers_of(conn, company_id):
-        return [r["email"] for r in conn.execute("SELECT email FROM users WHERE company_id=? AND active=1 AND "
-                                                 "role='manager'", (company_id,))]
-
     # ------------------------------------------------ page context
     @app.context_processor
     def inject_extras():
@@ -234,53 +218,15 @@ def register(A):
             time.sleep(CHECK_SECONDS)
 
     def expire_trials(conn):
-        """Pause companies whose trial has ended, and warn their managers a few days before."""
+        """Lock companies whose demo has ended (the managers see the days left at the top of every page)."""
         nowdt = utcnow()
-        for c in conn.execute("SELECT * FROM companies WHERE plan='trial' AND status='active' AND trial_ends_at IS NOT "
-                              "NULL AND trial_notice_at IS NULL AND trial_ends_at < ? AND trial_ends_at > ?",
-                              (iso(nowdt + timedelta(days=TRIAL_WARN_DAYS)), iso(nowdt))).fetchall():
-            n = conn.execute("UPDATE companies SET trial_notice_at=? WHERE id=? AND trial_notice_at IS NULL",
-                             (A.now(), c["id"])).rowcount
-            conn.commit()
-            if n and A.mailer.enabled():
-                end = parse(c["trial_ends_at"]).strftime("%b %d, %Y")
-                contact = f"reply to this email or contact {SUPPORT_EMAIL}" if SUPPORT_EMAIL else "reply to this email"
-                for to in managers_of(conn, c["id"]):
-                    try:
-                        A.mailer.send_notice(to, f"{A.PLATFORM_NAME}: your demo ends {end}", [
-                            f"Your {A.PLATFORM_NAME} demo for {c['name']} ends on {end}.",
-                            f"To keep sending packets after that, {contact}. Your forms, packets and signed copies "
-                            f"stay safe either way."], reply_to=SUPPORT_EMAIL or None)
-                    except Exception as exc:  # noqa: BLE001
-                        app.logger.warning("Trial notice to %s failed: %s", to, exc)
         for c in conn.execute("SELECT * FROM companies WHERE plan='trial' AND status='active' AND trial_ends_at IS NOT "
                               "NULL AND trial_ends_at <= ?", (iso(nowdt),)).fetchall():
             n = conn.execute("UPDATE companies SET status='suspended', paused_reason='trial_ended' WHERE id=? AND "
                              "status='active'", (c["id"],)).rowcount
             conn.commit()
-            if not n:
-                continue
-            app.logger.info("Trial ended: %s (company %s) is now paused", c["name"], c["id"])
-            if not A.mailer.enabled():
-                continue
-            contact = f"contact {SUPPORT_EMAIL}" if SUPPORT_EMAIL else "reply to this email"
-            for to in managers_of(conn, c["id"]):
-                try:
-                    A.mailer.send_notice(to, f"{A.PLATFORM_NAME}: your demo has ended", [
-                        f"Your {A.PLATFORM_NAME} demo for {c['name']} has ended, so your team's sign-in is "
-                        f"locked.", f"To continue, {contact}. Nothing has been deleted, and signing links already "
-                        f"sent to your clients keep working."], reply_to=SUPPORT_EMAIL or None)
-                except Exception as exc:  # noqa: BLE001
-                    app.logger.warning("Trial-ended notice to %s failed: %s", to, exc)
-            owner = A.mailer.admin_email()
-            if owner:
-                try:
-                    A.mailer.send_notice(owner, f"Demo ended: {c['name']}", [
-                        f"{c['name']}'s demo ended and the company is now locked.",
-                        f"Manager: {', '.join(managers_of(conn, c['id'])) or 'none'}.",
-                        "Give it another 14 days or mark it as paid from the Companies screen or the Admin Console."])
-                except Exception as exc:  # noqa: BLE001
-                    app.logger.warning("Trial-ended notice to owner failed: %s", exc)
+            if n:
+                app.logger.info("Demo ended: %s (company %s) is now locked", c["name"], c["id"])
 
     def reminder_info(p):
         """For the packet page: how automatic reminders stand for one packet."""
@@ -294,12 +240,12 @@ def register(A):
         exp = parse(p["expires_at"])
         if nxt and exp and nxt > exp:
             nxt = None
-        can = (A.mailer.enabled() and "@" in (p["client_email"] or "")) or (sms.enabled() and p["client_phone"])
+        can = sms.enabled() and bool(p["client_phone"])
         return {"on": True, "sent": sent, "max": most, "days": days, "next": iso(nxt) if nxt else None, "can": bool(can)}
 
     def run_reminders(conn):
-        """Email (and text) every client who still hasn't finished, on their company's schedule."""
-        if not (A.mailer.enabled() or sms.enabled()):
+        """Text every client who still hasn't finished, on their company's schedule."""
+        if not sms.enabled():
             return 0
         base = base_url()
         if not base:
@@ -310,15 +256,11 @@ def register(A):
             "SELECT p.*, c.name AS company_name, c.reminder_days, c.reminder_max FROM packets p "
             "JOIN companies c ON c.id = p.company_id WHERE c.status='active' AND c.reminders_on=1 "
             "AND p.completed_at IS NULL AND p.voided_at IS NULL AND p.sent_at IS NOT NULL AND p.expires_at > ? "
-            "AND COALESCE(p.reminder_count, 0) < c.reminder_max", (iso(nowdt),)).fetchall()
+            "AND COALESCE(p.client_phone, '') != '' AND COALESCE(p.reminder_count, 0) < c.reminder_max", (iso(nowdt),)).fetchall()
         for p in rows:
             last_raw = p["last_reminder_at"] or p["sent_at"]
             last = parse(last_raw)
             if not last or nowdt - last < timedelta(days=max(1, p["reminder_days"] or 2)):
-                continue
-            use_email = A.mailer.enabled() and "@" in (p["client_email"] or "")
-            use_text = sms.enabled() and bool(p["client_phone"])
-            if not (use_email or use_text):
                 continue
             # claim it, so two server processes never send the same reminder twice
             n = conn.execute("UPDATE packets SET last_reminder_at=?, reminder_count=COALESCE(reminder_count,0)+1 "
@@ -327,35 +269,15 @@ def register(A):
             conn.commit()
             if not n:
                 continue
-            company = A.get_company(p["company_id"])
-            g.company = company
-            link = f"{base}/s/{p['token']}"
-            items = [r["template_name"] for r in conn.execute(
-                "SELECT template_name FROM packet_items WHERE packet_id=? AND requires_signature=1 AND signed_at IS "
-                "NULL ORDER BY position", (p["id"],))] or [r["template_name"] for r in conn.execute(
-                    "SELECT template_name FROM packet_items WHERE packet_id=? ORDER BY position", (p["id"],))]
             label = f"automatic reminder {(p['reminder_count'] or 0) + 1} of {p['reminder_max']}"
-            how = []
-            if use_email:
-                try:
-                    A.mailer.send_request(p["client_email"], p["client_name"], company["name"], items, link, "",
-                                          p["expires_at"], reply_to=(A.staff_recipients(p) or [None])[0],
-                                          brand=brand_of(company, base), reminder=True)
-                    how.append("email")
-                except Exception as exc:  # noqa: BLE001
-                    add_event(conn, p["id"], "email_failed", f"{label}: {str(exc)[:160]}")
-            if use_text:
-                try:
-                    sms.send(p["client_phone"], text_body(company["name"], p["client_name"], link, reminder=True))
-                    how.append("text")
-                except Exception as exc:  # noqa: BLE001
-                    add_event(conn, p["id"], "text_failed", f"{label}: {str(exc)[:160]}")
-            if how:
-                add_event(conn, p["id"], "reminder", f"{label} by {' and '.join(how)}")
+            try:
+                sms.send(p["client_phone"], text_body(p["company_name"], p["client_name"], f"{base}/s/{p['token']}",
+                                                      reminder=True))
+                add_event(conn, p["id"], "reminder", f"{label} by text")
                 done += 1
-            else:  # nothing went out: don't use up a reminder; try again after the usual wait
-                conn.execute("UPDATE packets SET reminder_count=MAX(COALESCE(reminder_count,0)-1, 0) WHERE id=?",
-                             (p["id"],))
+            except Exception as exc:  # noqa: BLE001  (nothing went out: don't use up a reminder)
+                add_event(conn, p["id"], "text_failed", f"{label}: {str(exc)[:160]}")
+                conn.execute("UPDATE packets SET reminder_count=MAX(COALESCE(reminder_count,0)-1, 0) WHERE id=?", (p["id"],))
             conn.commit()
         return done
 
@@ -419,69 +341,6 @@ def register(A):
                 text_packet(pid)
         return redirect(url_for("packet_detail", pid=pid))
 
-    # ------------------------------------------------ forgot password
-    _asks = {}
-
-    @app.route("/forgot", methods=["GET", "POST"])
-    def forgot_password():
-        sent = False
-        if request.method == "POST":
-            email = request.form.get("email", "").strip()[:120]
-            key = A.client_ip()
-            recent = [t for t in _asks.get(key, []) if t > time.time() - 3600]
-            _asks[key] = recent + [time.time()]
-            if len(recent) < 5 and A.mailer.enabled() and "@" in email:
-                u = db().execute("SELECT u.* FROM users u JOIN companies c ON c.id=u.company_id WHERE u.email=? "
-                                 "AND u.active=1", (email,)).fetchone()
-                if u:
-                    asked = db().execute("SELECT COUNT(*) FROM password_resets WHERE user_id=? AND created_at > ?",
-                                         (u["id"], iso(utcnow() - timedelta(hours=1)))).fetchone()[0]
-                    if asked < 3:
-                        raw = secrets.token_urlsafe(32)
-                        db().execute("INSERT INTO password_resets (token_hash, user_id, created_at, expires_at) "
-                                     "VALUES (?,?,?,?)", (hashlib.sha256(raw.encode()).hexdigest(), u["id"], A.now(),
-                                                          iso(utcnow() + timedelta(minutes=RESET_MINUTES))))
-                        db().execute("DELETE FROM password_resets WHERE expires_at < ?",
-                                     (iso(utcnow() - timedelta(days=2)),))
-                        db().commit()
-                        try:
-                            A.mailer.send_password_reset(u["email"], u["name"], f"{base_url()}/reset/{raw}",
-                                                         A.PLATFORM_NAME, RESET_MINUTES)
-                        except Exception as exc:  # noqa: BLE001
-                            app.logger.warning("Password reset email to %s failed: %s", email, exc)
-            sent = True  # same answer whether or not the email has a login, so nobody can test addresses
-        return render_template("forgot.html", sent=sent, email_enabled=A.mailer.enabled(),
-                               email=request.form.get("email", ""))
-
-    def reset_row(raw):
-        row = db().execute("SELECT r.*, u.name, u.email FROM password_resets r JOIN users u ON u.id = r.user_id "
-                           "WHERE r.token_hash=? AND u.active=1", (hashlib.sha256(raw.encode()).hexdigest(),)).fetchone()
-        if not row or row["used_at"] or row["expires_at"] < A.now():
-            return None
-        return row
-
-    @app.route("/reset/<raw>", methods=["GET", "POST"])
-    def reset_password(raw):
-        row = reset_row(raw)
-        if not row:
-            return render_template("error.html", title="This reset link has expired",
-                                   message="Reset links work once, for 60 minutes. Ask for a new one from the "
-                                           "sign-in page."), 410
-        error = None
-        if request.method == "POST":
-            pw = request.form.get("password", "")
-            error = A.valid_password(pw) or (None if pw == request.form.get("confirm") else "The passwords don't match.")
-            if not error:
-                db().execute("UPDATE users SET password_hash=?, must_change_password=0 WHERE id=?",
-                             (generate_password_hash(pw), row["user_id"]))
-                db().execute("UPDATE password_resets SET used_at=? WHERE user_id=? AND used_at IS NULL",
-                             (A.now(), row["user_id"]))
-                db().commit()
-                session.clear()
-                flash("Your password is changed. Sign in with your new password.", "ok")
-                return redirect(url_for("login"))
-        return render_template("reset.html", row=row, error=error)
-
     # ------------------------------------------------ branding
     @app.route("/brand/<int:company_id>/<name>")
     def brand_logo(company_id, name):
@@ -528,7 +387,7 @@ def register(A):
                 os.remove(os.path.join(brand_dir, os.path.basename(old)))
             except OSError:
                 pass
-        flash("Branding saved. Your clients see it on the signing pages and in the emails they get.", "ok")
+        flash("Branding saved. Your clients see it on the signing pages.", "ok")
         return redirect(url_for("company_settings") + "#brand")
 
     @app.route("/company/reminders", methods=["POST"])

@@ -6,7 +6,7 @@
 <section class="panel receipt">
   <div class="seal"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
   <h1>All done, thank you</h1>
-  <p class="muted" style="max-width:52ch">{{ business_name }} has {{ 'received your signed forms' if signed_items else 'been told you received the files' }}. {{ 'A copy has been emailed to ' ~ p.client_email ~ '.' if email_enabled else 'Download copies below for your records.' }}</p>
+  <p class="muted" style="max-width:52ch">{{ business_name }} has {{ 'received your signed forms' if signed_items else 'been told you received the files' }}. Download your signed copies below for your records.</p>
   <span class="ref">Confirmation {{ packet_ref(p) }}</span>
   <span class="muted small">Completed {{ p.completed_at|when }}</span>
 </section>

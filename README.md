@@ -6,8 +6,8 @@ A small web app for sending forms to clients for e-signature and getting confirm
 
 - **Form library**: upload PDF forms (engagement letters, consents, contracts) or build fillable forms (intake questionnaires, authorizations). PDFs can also carry extra fields for the client to fill in.
 - **Signing packets**: bundle several forms for one client, in the order you choose, behind one private link.
-- **Send**: copy the link and send it yourself, or have the app email it (optional SMTP).
-- **Track and confirm**: each packet shows Sent → Opened → In progress → Signed, with a timestamped activity log. When the client finishes, they see a confirmation number and can download copies; you see "Confirmed" on the packet, and if email is on you both get the signed PDFs.
+- **Send**: copy the link into your own email or message, text it from the app (optional Twilio), or have the client sign right away on your device. The app doesn't send email.
+- **Track and confirm**: each packet shows Sent → Opened → In progress → Signed, with a timestamped activity log. When the client finishes, they see a confirmation number and download their signed copies; you see "Confirmed" on the packet and download the signed PDFs from it.
 - **Signed PDFs**: the original pages, stamped with a signing footer, plus a signature certificate page (signature, name, time, IP address, device, SHA-256 fingerprint of the original file). A per-packet audit trail PDF is one click away.
 
 Signatures are "simple electronic signatures" (drawn or typed, plus consent and an audit record). That's generally fine for engagement letters, intake and consent forms. For documents that legally need identity verification or a qualified signature, use a dedicated provider.
@@ -31,13 +31,13 @@ Each company that uses FormSign gets its **own account**: its own managers and s
   - **Open** a company to help it, with management access. An orange bar shows you're inside it; **Back to all companies** takes you out.
   - **Pause** a company (for example, unpaid account): its team can't sign in until you turn it back on. Nothing is deleted, and signing links already sent to its clients keep working.
   - **Change** the storage included for a company (default 25 GB, set with `INCLUDED_STORAGE_GB`).
-- **Company page** (managers): change the company name clients see, set a **notification email** that receives completion notices and client replies, and see storage used against the storage included.
+- **Company page** (managers): change the company name clients see, set the logo, colour and reminder schedule, and see storage used against the storage included.
 - **Sign-in**: everyone signs in with their email and password. The email decides which company they belong to, so each email can only have one login.
 - **Upgrading** from the single-company version: on first start, everything already in the database becomes one company named after your old `BUSINESS_NAME` setting. Nothing else changes for those users.
 
 ## Two owners sign
 
-On the New packet page choose **Two owners must both sign** and add the second owner's name and email (or mobile). Each owner gets their own link. The second owner signs each form after the first, seeing exactly what was filled in and chosen. The packet completes only when both have signed everything. Both signatures go on the signed PDF and in the signing record. When the first owner finishes, the second owner gets a "your turn" email, and automatic reminders go to whichever owner still has forms waiting.
+On the New packet page choose **Two owners must both sign** and add the second owner's name (and mobile, to text them). Each owner gets their own link, which you copy or text to them. The second owner signs each form after the first, seeing exactly what was filled in and chosen. The packet completes only when both have signed everything. Both signatures go on the signed PDF and in the signing record. When the first owner finishes, the second owner gets a "your turn" text (when texting is set up), and automatic text reminders go to whichever owner still has forms waiting.
 
 ## Photos and files from the client
 
@@ -65,7 +65,7 @@ Every signed PDF and audit trail is digitally sealed. If anyone changes the file
 
 ## 14-day demo (locks on its own)
 
-Companies that sign up themselves get a 14-day demo (`TRIAL_DAYS`). When you add a company yourself, tick **Start as a 14-day demo** to do the same (it's ticked by default). Managers see the days left at the top of every page and get an email 3 days before the end. When the demo ends, the company **locks on its own**: its team is signed out and can't sign in, and the sign-in page tells them to contact `SUPPORT_EMAIL`. Nothing is deleted, and signing links already sent to clients keep working. You get an email (`ADMIN_EMAIL`) naming the company.
+Companies that sign up themselves get a 14-day demo (`TRIAL_DAYS`). When you add a company yourself, tick **Start as a 14-day demo** to do the same (it's ticked by default). Managers see the days left at the top of every page. When the demo ends, the company **locks on its own**: its team is signed out and can't sign in, and the sign-in page tells them to contact `SUPPORT_EMAIL`. Nothing is deleted, and signing links already sent to clients keep working. The company shows as "Demo ended" on your Companies screen and in the Admin Console.
 
 **+14 days demo** (on the Companies screen or in the Admin Console) unlocks the company for another 14 days; you can do this as many times as you like. **Mark as paid** keeps it on for good.
 
@@ -75,19 +75,15 @@ The Admin Console has a **Billing** page for every company to record the invoice
 
 ## Automatic reminders
 
-Clients who haven't finished signing get a friendly reminder by email (and by text when their mobile number is on the packet and texting is set up). Each company sets the schedule under **Company → Automatic reminders** (default: every 2 days, at most 3). Reminders stop when the client finishes, or the packet is cancelled or its link expires. Sending a reminder by hand restarts the clock. Each reminder appears in the packet's Activity list. A reminder that fails to send doesn't count and is tried again later.
+Clients who haven't finished signing get a friendly reminder by text message, when their mobile number is on the packet and texting is set up. Each company sets the schedule under **Company → Automatic reminders** (default: every 2 days, at most 3). Reminders stop when the client finishes, or the packet is cancelled or its link expires. Texting the link by hand restarts the clock. Each reminder appears in the packet's Activity list. A reminder that fails to send doesn't count and is tried again later.
 
 ## Logo and colour
 
-Managers upload their logo and choose a colour under **Company → Logo and colour**. Clients see them on the signing pages and in the emails they receive.
+Managers upload their logo and choose a colour under **Company → Logo and colour**. Clients see them on the signing pages.
 
 ## Text messages (optional)
 
 With a [Twilio](https://www.twilio.com) account, staff can text the signing link (a box on the New packet page, or **Text the link** on a packet), and reminders also go by text. Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_FROM` (your Twilio number, like `+16135550100`, or a Messaging Service id starting with MG). A text costs about 1¢ in Canada and the US. Twilio handles replies of STOP automatically.
-
-## Forgot password
-
-With email turned on, the sign-in page has a **Forgot your password?** link. It emails a one-time link that works for 60 minutes. Managers can still set temporary passwords from the Team page.
 
 ## Storage warning
 
@@ -96,25 +92,6 @@ If the app runs on Render without a persistent disk, everything is erased on eve
 ## Admin Console (optional)
 
 If you run more than one FormSign app, the separate **FormSign Admin Console** shows every company from every app in one place and opens any company with one click. To connect this app to it, set `ADMIN_API_TOKEN` to a long random value (different for each app) and enter the same value in the console. Without that setting the admin API is off. See the Admin Console's README.
-
-## Email campaigns (mass email to your client list)
-
-The **Email** tab lets a company send one email to its whole client list, or to a group.
-
-- **Client list**: everyone you send a packet to is added automatically. You can also **import** a CSV or Excel (.xlsx) file (first row = headings; it needs an *Email* column and uses *Name* or *First/Last name*, *Company* and *Tags* if present) and **add people by hand**. Duplicates and invalid addresses are skipped, and you can tag everyone in a file (e.g. "Builders"). Download the list as CSV at any time.
-- **Write a campaign**: subject, message (plain text; blank lines make paragraphs, web addresses become links, `**text**` is bold), an optional button with a link, and personalization with `{first_name}`, `{name}` or `{organization}`. A live preview shows the email as clients will see it.
-- **Send to** everyone, or only clients with a given tag. **Send me a test** first, then **Review and send**. Sending runs in the background (you can close the page), shows progress, and can be stopped. If the server restarts mid-send it picks up where it stopped.
-- **Report** per campaign: sent, opened (an estimate, since some mail apps hide opens), failed (with the reason, and a *Retry failed* button) and skipped.
-- **Who can send**: managers can email the whole company list and see every campaign. Staff can send too, but only to the clients of their own packets and contacts they added themselves, and they only see their own campaigns.
-- **Canada's anti-spam law (CASL)**: every campaign email automatically includes the company name, its **mailing address** (set on the Company page; campaigns can't be sent until it's filled in), a contact email and a working **unsubscribe** link, plus the one-click unsubscribe headers Gmail, Outlook and Yahoo require. Unsubscribed clients are never emailed again, even if they appear in a later import. Before sending, the sender confirms the list is made of clients or people who agreed to receive emails. Only email people you have consent for (current clients, or people who opted in).
-- **Limits**: each company can send up to 2,000 campaign emails per 24 hours by default (`CAMPAIGN_DAILY_LIMIT`), at about 120 per minute (`CAMPAIGN_PER_MINUTE`). Match these to your email provider's plan.
-- Campaigns go out through the same SMTP settings as packets, with the company's name as the sender and replies going to the company's notification email. For bulk email use a provider built for it (Amazon SES, Postmark broadcast streams, Mailgun, SendGrid), and set up SPF and DKIM for your sending domain so emails land in the inbox.
-
-
-- Logins, roles and visibility below always apply **within one company**. If a company's only manager is locked out, the platform owner can open the company and reset their password from the Team page.
-- **Team** page (management only): create logins with a name, email, access level and a temporary password. People choose their own password the first time they sign in. Managers can change someone's access, reset a password, deactivate a login (it stops working immediately, and can be turned back on), or **remove** it for good. When you remove someone, their packets are never deleted: you choose who gets them, or leave them visible to management only. You can't remove or deactivate your own login.
-- **Staff** only see **their own packets**: the ones they created. Opening another person's packet by its address shows "Page not found". Staff can create, send and track packets and use library forms, but can't add, edit or remove forms in the library (the buttons are hidden and the server refuses those actions).
-- **Management** sees **every packet from every user**, with a **Created by** column and a filter to show one person's packets. They can also manage the form library and the Team page.
 
 ## Dashboard order and missing forms
 
@@ -137,7 +114,7 @@ The client reads every document right above where they sign:
 - **Form library** accepts any file type (PDF, Word, Excel, images, CAD, ZIP...), up to 50 MB.
 - **New packet → One-off files**: drop in files just for this client. They're sent with that packet only and never saved to your library.
 - For each one-off file, choose **Client signs this** or leave it unticked so the file is just for their records (they download it; you see when they did).
-- PDFs are shown on screen and stamped with the signature. Other files are downloaded by the client to review; their signed record is a signature page with the file's name and SHA-256 fingerprint (images are shown on that page). The original file is kept with the packet and attached to the completion email.
+- PDFs are shown on screen and stamped with the signature. Other files are downloaded by the client to review; their signed record is a signature page with the file's name and SHA-256 fingerprint (images are shown on that page). The original file is kept with the packet.
 - A packet with only files to review (nothing to sign) completes when the client clicks **Confirm I've received these files**.
 - Only PDFs and common images open in the browser; every other type is always sent as a download, so an uploaded file can never run as a web page.
 
@@ -165,20 +142,6 @@ Any host that runs Docker works too (Railway, Fly.io, a VPS): build the `Dockerf
 
 **Keep the disk backed up.** Everything (database, uploaded forms, signed PDFs) lives in `DATA_DIR`. Render takes daily disk snapshots on paid plans; you can also download the folder periodically.
 
-## Turn on email (optional)
-
-Set these environment variables and restart. Any SMTP service works: Google Workspace, Microsoft 365, Postmark, SendGrid, Mailgun, Amazon SES.
-
-| Variable | Example |
-| --- | --- |
-| `SMTP_HOST` | `smtp.postmarkapp.com` |
-| `SMTP_PORT` | `587` (or `465` for SSL) |
-| `SMTP_USER` / `SMTP_PASSWORD` | from your provider |
-| `SMTP_FROM` | `Your Company <forms@yourdomain.com>` |
-| `ADMIN_EMAIL` | fallback for completion notices and replies when a company has no notification email |
-
-With email on, you can send packets and reminders from the app, and the client, the person who sent the packet and the company's notification email receive the signed PDFs when the packet is completed. Gmail accounts need an app password; for client-facing mail a transactional service (Postmark, SES) gives better delivery.
-
 ## All settings
 
 | Variable | Required | Purpose |
@@ -193,24 +156,20 @@ With email on, you can send packets and reminders from the app, and the client, 
 | `SEAL` | no | `0` turns off PDF sealing |
 | `TRIAL_DAYS` | no | Length of the demo (default 14) |
 | `INVOICE_DEFAULT_AMOUNT` / `INVOICE_CURRENCY` | no | Suggested amount and currency for new invoices in the Admin Console (default 185.00 CAD) |
-| `SUPPORT_EMAIL` | recommended | Who companies contact to keep using the app after the demo (for example liz@helmmsp.ca) |
+| `SUPPORT_EMAIL` | recommended | Shown to companies when their demo ends, as who to contact (for example liz@helmmsp.ca) |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM` | no | Turn on text messages |
 | `REMINDER_CHECK_SECONDS` | no | How often the app checks for reminders and ended trials (default 300) |
 | `STORAGE_CHECK` | no | `0` hides the storage warning; `1` checks even off Render |
-| `CAMPAIGN_DAILY_LIMIT` | no | Campaign emails each company may send per 24 hours (default 2000) |
-| `CAMPAIGN_PER_MINUTE` | no | Sending speed for campaigns (default 120 per minute) |
 | `BUSINESS_NAME` | no | Only used when upgrading: names the first company |
-| `BASE_URL` | recommended | Public address, used in emailed links |
+| `BASE_URL` | recommended | Public address, used in signing links and texts |
 | `DATA_DIR` | no | Storage folder (default `./data`) |
 | `LINK_EXPIRY_DAYS` | no | Default link lifetime, also used by "Extend link" (default 30) |
 
 ## How it works
 
 - `admin_api.py`: private API for the Admin Console (company stats, pause, storage, one-time sign-in links).
-- `campaigns.py`: client lists, CSV/Excel import, campaign writing, background sending, unsubscribe and open tracking.
 - `app.py`: Flask routes for the admin side (`/`, `/library`, `/packets/...`) and the client side (`/s/<token>/...`).
 - `pdfgen.py`: builds signed PDFs and audit trails with pypdf and ReportLab.
-- `mailer.py`: optional SMTP email.
 - SQLite database with four tables: `templates`, `packets`, `packet_items`, `events`.
 - When a packet is created, each form is snapshotted into it, so editing or removing a form later never changes what a client already received or signed.
 - Signing links use 32-character random tokens, expire, and can be cancelled. Anyone with a link can sign it, so send links only to the client.

@@ -9,7 +9,7 @@
 {% if p.message %}<section class="panel"><span class="eyebrow">Note from {{ business_name }}</span><p style="white-space:pre-wrap">{{ p.message }}</p></section>{% endif %}
 {% if all_done %}
 <section class="panel receipt"><h2>You've signed everything, thank you</h2>
-  <p class="muted">{{ 'Your signed copies are below.' if p.completed_at else 'You will get your signed copies by email once the packet is complete.' }}</p></section>
+  <p class="muted">{{ 'Your signed copies are below.' if p.completed_at else 'Come back to this page once the packet is complete to download your copies.' }}</p></section>
 {% endif %}
 <section class="panel">
   <div class="panel-head"><h2>To sign</h2><span class="muted small">{{ rows|selectattr('done')|list|length }} of {{ rows|length }} signed by you</span></div>
@@ -25,5 +25,5 @@
   </div>
 </section>
 {% if next_item %}<div><a class="btn btn-primary btn-lg" href="{{ url_for('cosign_item', token=s.token, iid=next_item.id) }}">Start signing</a></div>
-{% elif not all_done %}<p class="muted">Nothing is ready for you yet. We'll let you know when {{ p.client_name.split(' ')[0] }} has signed{% if s.email %} (by email to {{ s.email }}){% endif %}.</p>{% endif %}
+{% elif not all_done %}<p class="muted">Nothing is ready for you yet. Come back to this page after {{ p.client_name.split(' ')[0] }} has signed.</p>{% endif %}
 {% endblock %}

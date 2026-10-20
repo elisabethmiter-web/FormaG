@@ -6,7 +6,7 @@
 <div class="page-head">
   <div><a href="{{ url_for('dashboard') }}" class="small">← Packets</a>
     <div class="row"><h1>{{ p.client_name }}</h1><span class="stamp s-{{ state }}">{{ labels[state] }}</span></div>
-    <p class="muted">{{ p.client_email }} · <span class="mono">{{ packet_ref(p) }}</span></p></div>
+    <p class="muted">{{ p.client_email or 'no email' }} · <span class="mono">{{ packet_ref(p) }}</span></p></div>
   <div class="row">
     <a class="btn" href="{{ url_for('admin_audit_pdf', pid=p.id) }}">Audit trail PDF</a>
   </div>
@@ -20,14 +20,11 @@
 {% if state not in ('completed','voided') %}
 <section class="panel">
   <div class="panel-head"><h2>Signing link</h2><span class="muted small">Valid until {{ p.expires_at|day }}</span></div>
-  <p class="muted small">Send this to {{ p.client_name }} by email or text. Anyone with the link can sign, so send it only to your client.</p>
+  <p class="muted small">Copy it into your own email or message to {{ p.client_name }}{{ ', or text it from here' if sms_enabled }}. Anyone with the link can sign, so send it only to your client.</p>
   <div class="linkbox"><input id="signing-link" type="text" readonly value="{{ link }}" aria-label="Signing link">
     <button class="btn btn-primary" type="button" id="copy-link">Copy link</button>
     <a class="btn btn-quiet" href="{{ link }}" target="_blank" rel="noopener">Preview as client</a></div>
   <div class="row">
-    {% if email_enabled %}
-    <form method="post" action="{{ url_for('email_packet', pid=p.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn">{{ 'Send reminder email' if p.sent_at else 'Email to client' }}</button></form>
-    {% endif %}
     {% if sms_enabled and p.client_phone %}
     <form method="post" action="{{ url_for('text_packet_view', pid=p.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn">Text the link</button></form>
     {% endif %}
@@ -45,7 +42,7 @@
   {% set ri = reminder_info(p) %}
   <p class="muted small" style="margin:12px 0 0">
   {% if not ri.on %}Automatic reminders are off for your company{% if is_manager %} (<a href="{{ url_for('company_settings') }}#reminders">turn on</a>){% endif %}.
-  {% elif not ri.can %}Automatic reminders need {{ 'email or ' if not email_enabled }}a mobile number{{ ' with texting set up' if not sms_enabled }}.
+  {% elif not ri.can %}Automatic reminders go by text: {{ 'add the client\'s mobile number above.' if sms_enabled else 'texting isn\'t set up on this server yet.' }}
   {% elif ri.next %}Automatic reminder {{ ri.sent + 1 }} of {{ ri.max }} goes out around {{ ri.next|when }} if {{ p.client_name.split(' ')[0] }} hasn't finished.
   {% else %}All {{ ri.max }} automatic reminders have been sent{{ ' or the link expires first' if ri.sent < ri.max }}.{% endif %}</p>
 

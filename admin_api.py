@@ -96,17 +96,11 @@ def register(A):
             "FROM packets WHERE company_id=?", (overdue_before, cutoff30, cid)).fetchone()
         u = d.execute("SELECT SUM(active=1) users, SUM(active=1 AND role='manager') managers, MAX(last_login_at) last_login "
                       "FROM users WHERE company_id=?", (cid,)).fetchone()
-        try:
-            camp = d.execute("SELECT COUNT(*) FROM campaigns WHERE company_id=? AND status IN ('sent','sending')",
-                             (cid,)).fetchone()[0]
-            contacts = d.execute("SELECT COUNT(*) FROM contacts WHERE company_id=?", (cid,)).fetchone()[0]
-        except Exception:  # noqa: BLE001  (older database without campaigns)
-            camp = contacts = 0
         last = max([x for x in (p["last_packet"], u["last_login"]) if x] or [""]) or None
         return {"packets": p["total"] or 0, "completed": p["completed"] or 0, "open": p["open"] or 0,
                 "overdue": p["overdue"] or 0, "packets_30d": p["last30"] or 0, "users": u["users"] or 0,
                 "managers": u["managers"] or 0, "last_login": u["last_login"], "last_packet": p["last_packet"],
-                "last_activity": last, "campaigns": camp, "contacts": contacts,
+                "last_activity": last,
                 "storage_bytes": A.company_storage_bytes(cid)}
 
     # ------------------------------------------------ invoices (payment tracking for the platform owner)

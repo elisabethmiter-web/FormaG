@@ -8,12 +8,8 @@
 <form method="post" class="panel stack">
   <input type="hidden" name="csrf" value="{{ csrf_token() }}">
   <h2>Details</h2>
-  <label for="name">Company name <span class="hint">Shown to clients on signing pages, emails and signed PDFs</span>
+  <label for="name">Company name <span class="hint">Shown to clients on signing pages and signed PDFs</span>
     <input id="name" type="text" name="name" value="{{ c.name }}" maxlength="100" required></label>
-  <label for="notify_email">Notification email <span class="hint">Gets a copy when any packet is fully signed, and receives client replies. The sender of the packet is always notified too.</span>
-    <input id="notify_email" type="email" name="notify_email" value="{{ c.notify_email or '' }}" placeholder="office@yourcompany.com"></label>
-  <label for="mailing_address">Mailing address <span class="hint">Printed at the bottom of every campaign email. Canada's anti-spam law (CASL) requires it before you can send campaigns.</span>
-    <textarea id="mailing_address" name="mailing_address" rows="3" placeholder="123 Main Street&#10;Toronto, ON  M5V 1A1">{{ c.mailing_address or '' }}</textarea></label>
   <div><button class="btn btn-primary">Save</button></div>
 </form>
 
@@ -33,7 +29,7 @@
 <form method="post" action="{{ url_for('company_brand') }}" class="panel stack" id="brand" enctype="multipart/form-data">
   <input type="hidden" name="csrf" value="{{ csrf_token() }}">
   <h2>Logo and colour</h2>
-  <p class="muted small" style="margin:0">Your clients see these on the signing pages and in the emails they get from you.</p>
+  <p class="muted small" style="margin:0">Your clients see these on the signing pages.</p>
   {% set b = brand %}
   <div class="brand-preview" style="{% if b.color %}--accent:{{ b.color }};--accent-ink:{{ b.ink }}{% endif %}">
     {% if b.logo_url %}<img src="{{ b.logo_url }}" alt="Your logo">{% else %}<strong>{{ c.name }}</strong>{% endif %}
@@ -51,8 +47,8 @@
 <form method="post" action="{{ url_for('company_reminders') }}" class="panel stack" id="reminders">
   <input type="hidden" name="csrf" value="{{ csrf_token() }}">
   <h2>Automatic reminders</h2>
-  <p class="muted small" style="margin:0">Clients who haven't finished signing get a friendly reminder{{ ' by email' if email_enabled }}{{ ' and by text (when you add their mobile number)' if sms_enabled }}. Reminders stop as soon as they finish, or when the packet is cancelled or its link expires.</p>
-  {% if not email_enabled and not sms_enabled %}<div class="flash flash-error">Email and texting aren't set up on this server, so reminders can't go out yet.</div>{% endif %}
+  <p class="muted small" style="margin:0">Clients who haven't finished signing get a friendly reminder by text message (when their mobile number is on the packet). Reminders stop as soon as they finish, or when the packet is cancelled or its link expires.</p>
+  {% if not sms_enabled %}<div class="flash flash-error">Texting isn't set up on this server yet, so reminders can't go out. Until then, use Copy link or Text the link on each packet.</div>{% endif %}
   <label class="check"><input type="checkbox" name="reminders_on" {{ 'checked' if c.reminders_on }}> Send automatic reminders</label>
   <div class="grid-2">
     <label for="reminder_days">Every <span class="hint">days without signing</span>

@@ -6,7 +6,7 @@
 {% if part != 'files' and px.primary_done and px.waiting and not p.completed_at %}
 <section class="panel" style="border-color:var(--accent)">
   <h2>You've signed everything</h2>
-  <p style="margin:6px 0 0">Thank you. We're now waiting for {{ px.waiting|join(' and ') }}. They've been sent their own link. You'll get your signed copies by email once everything is complete.</p>
+  <p style="margin:6px 0 0">Thank you. We're now waiting for {{ px.waiting|join(' and ') }} (they sign from their own link). Come back to this page once everything is complete to download your signed copies.</p>
   {% if kiosk %}{% for s in px.cosigners %}{% if s.signed < s.total %}
   <p style="margin-top:12px"><a class="btn btn-primary btn-lg" href="{{ url_for('cosign_packet', token=s.token) }}">Next: {{ s.name }} signs on this device</a></p>
   {% endif %}{% endfor %}{% endif %}

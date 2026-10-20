@@ -9,7 +9,7 @@
 
   <div class="grid-2">
     <label for="client_name">Client name<input id="client_name" type="text" name="client_name" value="{{ form.get('client_name','') }}" required></label>
-    <label for="client_email">Client email<input id="client_email" type="email" name="client_email" value="{{ form.get('client_email','') }}"></label>
+    <label for="client_email">Client email <span class="hint">Optional, for your records</span><input id="client_email" type="email" name="client_email" value="{{ form.get('client_email','') }}"></label>
     <label for="client_phone">Client mobile <span class="hint">Optional. For text messages{{ '' if sms_enabled else ' (when texting is set up)' }}</span><input id="client_phone" type="tel" name="client_phone" value="{{ form.get('client_phone','') }}" placeholder="613-555-0123" autocomplete="off"></label>
   </div>
   <fieldset class="stack signers-box" style="border:0;padding:0;margin:0;gap:8px">
@@ -54,18 +54,15 @@
       <label for="upload_request">What should they send?<input id="upload_request" type="text" name="upload_request" maxlength="500" value="{{ form.get('upload_request','') }}" placeholder="e.g. Photos of your sink and faucet model numbers, and the cabinet layout"></label>
     </div>
   </fieldset>
-  <label for="message">Note to your client <span class="hint">Optional. Shown on the signing page{{ ' and in the email' if email_enabled }}.</span>
+  <label for="message">Note to your client <span class="hint">Optional. Shown on the signing page.</span>
     <textarea id="message" name="message" rows="3" placeholder="Hi Sam, here are the onboarding documents we discussed.">{{ form.get('message','') }}</textarea></label>
   <label for="expiry_days" style="max-width:260px">Link expires after
     <select id="expiry_days" name="expiry_days">{% for d in (7,14,30,60,90) %}<option value="{{ d }}" {{ 'selected' if d==30 }}>{{ d }} days</option>{% endfor %}</select></label>
   <div class="row">
     {% if sms_enabled %}<label class="check" style="flex-basis:100%"><input type="checkbox" name="text_link" {{ 'checked' if form.get('text_link') }}> Also text the signing link to the client's mobile</label>{% endif %}
-    {% if email_enabled %}<button class="btn btn-primary btn-lg" name="action" value="send_email">Email to client</button>
-    <button class="btn btn-lg" name="action" value="link">Create link only</button>
-    <button class="btn btn-lg" name="action" value="in_person" title="Your client signs on this device now. Email is optional.">Sign now on this device</button>
-    {% else %}<button class="btn btn-primary btn-lg" name="action" value="link">Create signing link</button>
-    <button class="btn btn-lg" name="action" value="in_person" title="Your client signs on this device now. Email is optional.">Sign now on this device</button>
-    <span class="muted small">You'll copy the link and send it yourself. Add SMTP settings to email it from here.</span>{% endif %}
+    <button class="btn btn-primary btn-lg" name="action" value="link">Create signing link</button>
+    <button class="btn btn-lg" name="action" value="in_person" title="Your client signs on this device now">Sign now on this device</button>
+    <span class="muted small">Then copy the link{{ ' or text it' if sms_enabled }} to your client.</span>
   </div>
 </form>
 {% endblock %}
