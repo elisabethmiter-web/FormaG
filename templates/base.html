@@ -37,7 +37,7 @@
 {% endif %}
 {% if trial_days_left is not none and in_company and is_manager %}
 <div class="alert-bar {{ 'alert-warn' if trial_days_left <= 3 else 'alert-info' }}"><div class="topbar-inner">
-  <span><strong>Free trial: {{ trial_days_left }} day{{ 's' if trial_days_left != 1 }} left.</strong> The account pauses on its own when the trial ends{% if support_email %}. To keep using {{ platform_name }}, contact <a href="mailto:{{ support_email }}">{{ support_email }}</a>{% endif %}. Nothing is deleted.</span>
+  <span><strong>Demo: {{ trial_days_left }} day{{ 's' if trial_days_left != 1 }} left.</strong> The account locks on its own when the demo ends{% if support_email %}. To keep using {{ platform_name }}, contact <a href="mailto:{{ support_email }}">{{ support_email }}</a>{% endif %}. Nothing is deleted.</span>
 </div></div>
 {% endif %}
 <main class="wrap {% block wrapclass %}{% endblock %}">

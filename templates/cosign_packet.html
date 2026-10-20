@@ -1,0 +1,29 @@
+{% extends "client_base.html" %}
+{% block title %}Forms to sign{% endblock %}
+{% block content %}
+<section class="stack" style="gap:8px">
+  <span class="eyebrow">For {{ s.name }} · second owner{% if p.so_number %} · Order {{ p.so_number }}{% endif %}</span>
+  <h1>{{ business_name }} needs your signature on {{ rows|length }} item{{ 's' if rows|length != 1 }}</h1>
+  <p class="muted">You and {{ p.client_name }} both sign these. You sign each one after {{ p.client_name.split(' ')[0] }} has, and you'll see exactly what they filled in and chose.</p>
+</section>
+{% if p.message %}<section class="panel"><span class="eyebrow">Note from {{ business_name }}</span><p style="white-space:pre-wrap">{{ p.message }}</p></section>{% endif %}
+{% if all_done %}
+<section class="panel receipt"><h2>You've signed everything, thank you</h2>
+  <p class="muted">{{ 'Your signed copies are below.' if p.completed_at else 'You will get your signed copies by email once the packet is complete.' }}</p></section>
+{% endif %}
+<section class="panel">
+  <div class="panel-head"><h2>To sign</h2><span class="muted small">{{ rows|selectattr('done')|list|length }} of {{ rows|length }} signed by you</span></div>
+  <div class="doc-list">
+  {% for r in rows %}
+    <div class="doc-row">
+      <div class="doc-main"><strong>{{ r.it.template_name }}</strong><span class="small muted">{% if r.done %}Signed by you{% elif r.ready %}Signed by {{ p.client_name.split(' ')[0] }} · ready for you{% else %}Waiting for {{ p.client_name.split(' ')[0] }} to sign first{% endif %}</span></div>
+      {% if r.done %}<a class="btn" href="{{ url_for('cosign_signed', token=s.token, iid=r.it.id) }}">Signed PDF</a>
+      {% elif r.ready %}<a class="btn {{ 'btn-primary' if next_item and next_item.id == r.it.id }}" href="{{ url_for('cosign_item', token=s.token, iid=r.it.id) }}">Review and sign</a>
+      {% else %}<span class="stamp s-sent">Waiting</span>{% endif %}
+    </div>
+  {% endfor %}
+  </div>
+</section>
+{% if next_item %}<div><a class="btn btn-primary btn-lg" href="{{ url_for('cosign_item', token=s.token, iid=next_item.id) }}">Start signing</a></div>
+{% elif not all_done %}<p class="muted">Nothing is ready for you yet. We'll let you know when {{ p.client_name.split(' ')[0] }} has signed{% if s.email %} (by email to {{ s.email }}){% endif %}.</p>{% endif %}
+{% endblock %}

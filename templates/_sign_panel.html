@@ -1,0 +1,29 @@
+{# Name, signature pad and consent: used by the second owner's signing page #}
+<section class="panel">
+  <h2>Sign</h2>
+  <div class="{{ 'has-error' if errors.get('signer_name') }}">
+    <label for="signer_name" style="max-width:420px">Full name<input id="signer_name" type="text" name="signer_name" value="{{ signer_default }}" required autocomplete="name"></label>
+    {% if errors.get('signer_name') %}<span class="field-error">{{ errors.signer_name }}</span>{% endif %}
+  </div>
+  <div class="sig-block">
+    <div class="panel-head">
+      <div class="sig-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected="true" data-mode="draw">Draw</button>
+        <button type="button" role="tab" aria-selected="false" data-mode="type">Type</button>
+      </div>
+      <button type="button" class="btn btn-quiet" id="sig-clear">Clear</button>
+    </div>
+    <div id="sig-draw" class="sig-pad-wrap"><canvas class="sig-pad" id="sig-pad" aria-label="Signature drawing area"></canvas><span class="sig-x">✕</span><div class="sig-line"></div></div>
+    <div id="sig-type" hidden><div class="sig-typed-preview" id="sig-typed"></div><p class="muted small" style="margin-top:6px">Your typed name, in signature style.</p></div>
+    <p class="muted small" id="sig-help">Use your mouse, trackpad or finger to sign in the box.</p>
+    {% if errors.get('signature') %}<span class="field-error">{{ errors.signature }}</span>{% endif %}
+  </div>
+  <input type="hidden" name="signature" id="signature">
+  <div class="{{ 'has-error' if errors.get('consent') }}">
+    <label class="check" for="consent"><input type="checkbox" id="consent" name="consent" required>
+      <span>I agree to sign “{{ it.template_name }}” electronically. My electronic signature is the legal equivalent of my handwritten signature.</span></label>
+    {% if errors.get('consent') %}<span class="field-error">{{ errors.consent }}</span>{% endif %}
+  </div>
+  <div class="row"><button class="btn btn-primary btn-lg" id="submit-btn">{{ submit_label }}</button>
+    <span class="muted small" id="submit-msg"></span></div>
+</section>

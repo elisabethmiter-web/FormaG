@@ -2,7 +2,7 @@
 {% block title %}{{ 'Forms to sign' if total else 'Files from ' ~ business_name }}{% endblock %}
 {% block content %}
 <section class="stack" style="gap:8px">
-  <span class="eyebrow">For {{ p.client_name }}</span>
+  <span class="eyebrow">For {{ p.client_name }}{% if p.so_number %} · Order {{ p.so_number }}{% endif %}</span>
   {% if total %}
   <h1>{{ business_name }} has sent you {{ total }} item{{ 's' if total!=1 }} to sign{% if info_items %} and {{ info_items|length }} file{{ 's' if info_items|length!=1 }} to review{% endif %}</h1>
   <p class="muted">Review each one, fill in anything requested, and sign.{% if deadline.due_at %} <strong>Please complete by {{ deadline.due_at|when }}.</strong>{% endif %}</p>
@@ -11,6 +11,7 @@
   <p class="muted">Download and review the files below, then confirm you've received them.</p>
   {% endif %}
 </section>
+{% set part = 'top' %}{% include "_client_more.html" %}
 {% if p.message %}<section class="panel"><span class="eyebrow">Note from {{ business_name }}</span><p style="white-space:pre-wrap">{{ p.message }}</p></section>{% endif %}
 {% if items %}
 <section class="panel">
@@ -18,7 +19,7 @@
   <div class="doc-list">
   {% for it in items %}
     <div class="doc-row">
-      <div class="doc-main"><strong>{{ it.template_name }}</strong><span class="small muted">{{ 'Document to review and sign' if it.template_kind in ('pdf','file') else 'Form to fill in and sign' }}{% if it.template_kind=='file' %} · {{ it.file_name|filetype }}{% endif %}</span></div>
+      <div class="doc-main"><strong>{{ it.template_name }}</strong><span class="small muted">{{ {'layout':'Choose a layout option and sign','drawing':'Review the drawing and approve or request changes'}.get(it.template_kind, 'Document to review and sign' if it.template_kind in ('pdf','file') else 'Form to fill in and sign') }}{% if it.template_kind=='file' %} · {{ it.file_name|filetype }}{% endif %}</span></div>
       {% if it.signed_at %}<span class="stamp s-completed">Signed</span>
       {% else %}<a class="btn {{ 'btn-primary' if next_item and next_item.id==it.id }}" href="{{ url_for('client_form', token=p.token, iid=it.id) }}">{{ 'Start' if signed==0 and next_item.id==it.id else 'Open' }}</a>{% endif %}
     </div>
@@ -39,6 +40,7 @@
   </div>
 </section>
 {% endif %}
+{% set part = 'files' %}{% include "_client_more.html" %}
 {% if next_item %}<div><a class="btn btn-primary btn-lg" href="{{ url_for('client_form', token=p.token, iid=next_item.id) }}">{{ 'Start signing' if signed==0 else 'Continue' }}</a></div>
 {% elif not total %}
 <form method="post" action="{{ url_for('client_confirm', token=p.token) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}">

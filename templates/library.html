@@ -31,6 +31,38 @@
 {% endif %}
 
 {% if templates %}
+{% set bundles = bundles_for(current_company_id()) %}
+<section class="panel" id="bundles">
+  <div class="panel-head"><h2>Bundles</h2><span class="muted small">Sets of forms you send together, picked in one click on New packet</span></div>
+  {% if bundles %}
+  <div class="doc-list">
+  {% for b in bundles %}
+    <div class="doc-row"><div class="doc-main"><strong>{{ b.name }}</strong><span class="small muted">{{ b.names|join(' · ') or 'No forms left in this bundle' }}</span></div>
+      <a class="btn" href="{{ url_for('new_packet', bundle=b.id) }}">Send</a>
+      {% if is_manager %}<details class="bundle-edit"><summary class="btn btn-quiet">Edit</summary>
+        <form method="post" action="{{ url_for('bundle_update', bid=b.id) }}" class="stack" style="gap:8px;margin-top:8px">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <label>Name<input type="text" name="name" value="{{ b.name }}" maxlength="80" required></label>
+          <div class="stack" style="gap:4px">{% for t in templates %}<label class="check small"><input type="checkbox" name="template_ids" value="{{ t.id }}" {{ 'checked' if t.id in b.ids }}> {{ t.name }}</label>{% endfor %}</div>
+          <div class="row"><button class="btn btn-primary small" name="action" value="save">Save</button>
+            <button class="btn btn-quiet btn-danger small" name="action" value="delete" formnovalidate>Remove bundle</button></div>
+        </form></details>{% endif %}
+    </div>
+  {% endfor %}
+  </div>
+  {% elif not is_manager %}<p class="muted small">No bundles yet. Management can create them.</p>{% endif %}
+  {% if is_manager and templates %}
+  <details {{ 'open' if not bundles }}><summary class="small" style="cursor:pointer;margin-top:8px">New bundle</summary>
+    <form method="post" action="{{ url_for('bundle_create') }}" class="stack" style="gap:8px;margin-top:8px">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <label>Bundle name<input type="text" name="name" maxlength="80" placeholder="e.g. Kitchen job" required></label>
+      <div class="stack" style="gap:4px"><span class="small muted">Forms in this bundle, in the order they're listed:</span>
+        {% for t in templates %}<label class="check small"><input type="checkbox" name="template_ids" value="{{ t.id }}"> {{ t.name }}</label>{% endfor %}</div>
+      <div><button class="btn btn-primary">Save bundle</button></div>
+    </form></details>
+  {% endif %}
+</section>
+
 <div class="forms-grid">
   {% for t in templates %}
   <article class="form-card">
@@ -42,6 +74,7 @@
       {% if t.kind in ('pdf','file') %}<a class="btn btn-quiet" href="{{ url_for('template_file', tid=t.id) }}" target="_blank">{{ 'Preview' if t.kind=='pdf' else 'Download' }}</a>{% endif %}
       {% if is_manager %}
       <a class="btn btn-quiet" href="{{ url_for('edit_form', tid=t.id) }}">Edit</a>
+      {% if t.kind == 'pdf' %}<a class="btn btn-quiet" href="{{ url_for('place_boxes', tid=t.id) }}" title="Put the signature, name and date right on the page">{{ 'Signature boxes (' ~ placement_count(t) ~ ')' if placement_count(t) else 'Place signature' }}</a>{% endif %}
       <form method="post" action="{{ url_for('archive_form', tid=t.id) }}" data-confirm="Remove “{{ t.name }}” from the library?">
         <input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn btn-quiet btn-danger">Remove</button></form>
       {% endif %}

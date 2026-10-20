@@ -1,0 +1,17 @@
+{% extends "client_base.html" %}
+{% block title %}Signing mode{% endblock %}
+{% block content %}
+<section class="panel stack" style="max-width:520px">
+  <span class="eyebrow">This device is in signing mode</span>
+  <h1 style="font-size:1.6rem">Thank you{% if p %}, {{ p.client_name.split(' ')[0] }}{% endif %}</h1>
+  <p class="muted">Please hand the device back to {{ k.by or 'the team' }}. Staff: enter your password to return to the packet.</p>
+  {% if links %}<div class="stack" style="gap:6px"><span class="small muted">Still signing? Continue as:</span>
+    <div class="row">{% for name, href in links %}<a class="btn" href="{{ href }}">{{ name }}</a>{% endfor %}</div></div>{% endif %}
+  <form method="post" class="stack" style="gap:10px">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    {% if error %}<div class="flash flash-error">{{ error }}</div>{% endif %}
+    <label for="password">Staff password<input id="password" type="password" name="password" autocomplete="current-password" required></label>
+    <div><button class="btn btn-primary">Return to the packet</button></div>
+  </form>
+</section>
+{% endblock %}

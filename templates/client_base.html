@@ -15,6 +15,7 @@
   {% else %}<span class="brand">{% include "_mark.html" %}{{ business_name }}</span>{% endif %}
   {% block topright %}{% endblock %}
 </div></header>
+{% if kiosk %}<div class="kiosk-bar"><span>Signing in person with {{ business_name }}</span><a href="{{ url_for('kiosk_unlock') }}">Staff: hand back</a></div>{% endif %}
 <main class="client-wrap">
 {% include "_flash.html" %}
 {% block content %}{% endblock %}

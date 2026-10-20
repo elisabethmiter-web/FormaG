@@ -1,0 +1,29 @@
+{% extends "client_base.html" %}
+{% block title %}{{ it.template_name }}{% endblock %}
+{% block topright %}<a class="small" href="{{ url_for('cosign_packet', token=s.token) }}">All forms</a>{% endblock %}
+{% block content %}
+<ol class="steps" aria-label="Progress">
+{% for i in items %}<li class="{{ 'done' if i.id in done else ('current' if i.id == it.id) }}">{{ loop.index }}. {{ i.template_name }}</li>{% endfor %}
+</ol>
+<section class="stack" style="gap:6px">
+  <span class="eyebrow">Second owner · signed by {{ it.signer_name }} on {{ it.signed_at|when }}</span>
+  <h1>{{ it.template_name }}</h1>
+  <p class="muted">This is the document as {{ p.client_name.split(' ')[0] }} signed it, including anything they filled in or chose. Read it, then add your signature below.</p>
+</section>
+<section class="panel">
+  {% if pages %}
+  <div class="doc-pages" aria-label="{{ it.template_name }}, {{ pages }} page{{ 's' if pages != 1 }}">
+  {% for n in range(pages) %}
+    <a href="{{ url_for('cosign_page', token=s.token, iid=it.id, n=n) }}" target="_blank" rel="noopener"><img src="{{ url_for('cosign_page', token=s.token, iid=it.id, n=n) }}" alt="Page {{ n + 1 }} of {{ pages }}" loading="{{ 'eager' if n < 2 else 'lazy' }}"></a>
+  {% endfor %}
+  <p class="muted small doc-end">Tap a page to zoom · End of document</p>
+  </div>
+  {% else %}<p class="muted">The document can't be shown here.</p>{% endif %}
+</section>
+<form method="post" class="stack" id="sign-form" novalidate>
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  {% set submit_label = 'Sign and continue' if (items|length - done|length) > 1 else 'Sign and finish' %}
+  {% include "_sign_panel.html" %}
+</form>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='sign.js') }}"></script>{% endblock %}

@@ -1,0 +1,36 @@
+{# Client signing page: second owner, waiting, and files to add #}
+{% set px = packet_extras(p) %}
+{% if part != 'files' and px.cosigners and not px.primary_done %}
+<p class="muted small" style="margin:0">{% for s in px.cosigners %}{{ s.name }}{% endfor %} also signs these forms, after you, from their own link.</p>
+{% endif %}
+{% if part != 'files' and px.primary_done and px.waiting and not p.completed_at %}
+<section class="panel" style="border-color:var(--accent)">
+  <h2>You've signed everything</h2>
+  <p style="margin:6px 0 0">Thank you. We're now waiting for {{ px.waiting|join(' and ') }}. They've been sent their own link. You'll get your signed copies by email once everything is complete.</p>
+  {% if kiosk %}{% for s in px.cosigners %}{% if s.signed < s.total %}
+  <p style="margin-top:12px"><a class="btn btn-primary btn-lg" href="{{ url_for('cosign_packet', token=s.token) }}">Next: {{ s.name }} signs on this device</a></p>
+  {% endif %}{% endfor %}{% endif %}
+</section>
+{% endif %}
+{% if part == 'files' and (px.upload_request or px.uploads) %}
+<section class="panel" id="files">
+  <div class="panel-head"><h2>Photos and files</h2><span class="muted small">Optional</span></div>
+  {% if px.upload_request %}<div class="note-box" style="margin-bottom:10px">{{ business_name }} asks: <strong>{{ px.upload_request }}</strong></div>{% endif %}
+  {% if px.uploads %}
+  <div class="doc-list">
+  {% for f in px.uploads %}
+    <div class="doc-row"><div class="doc-main"><strong>{{ f.name }}</strong><span class="small muted">{{ f.size|gb }} · added {{ f.uploaded_at|when }}</span></div>
+      {% if p.voided_at is none %}<form method="post" action="{{ url_for('client_upload_delete', token=p.token, fid=f.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn btn-quiet small">Remove</button></form>{% endif %}</div>
+  {% endfor %}
+  </div>
+  {% endif %}
+  {% if p.voided_at is none %}
+  <form method="post" action="{{ url_for('client_upload', token=p.token) }}" enctype="multipart/form-data" class="stack" style="gap:8px;margin-top:10px">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <label class="dropzone" for="client-files"><span><strong>Take a photo or choose files</strong><br><span class="muted small">Photos, PDF, Word, Excel or drawings · up to 25 MB each</span></span>
+      <input id="client-files" type="file" name="files" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.dwg,.dxf,.heic,.rtf,.odt,.ods,.mp4,.mov" onchange="this.form.submit()"></label>
+    <noscript><button class="btn">Upload</button></noscript>
+  </form>
+  {% endif %}
+</section>
+{% endif %}

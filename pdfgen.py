@@ -76,7 +76,37 @@ def _answers_table(fields, answers):
     return t
 
 
+def signers_of(meta, sig_path):
+    """Everyone who signed this document: meta["signers"] when there are two owners, else the one signer."""
+    if meta.get("signers"):
+        return meta["signers"]
+    return [{"name": meta["signer_name"], "sig_path": sig_path, "signed_at": meta["signed_at"],
+             "ip": meta.get("ip"), "user_agent": meta.get("user_agent"), "label": "Signature"}]
+
+
+def _sig_box(s):
+    img = ImageReader(s["sig_path"])
+    iw, ih = img.getSize()
+    w = 2.8 * inch
+    h = min(w * ih / iw, 1.1 * inch)
+    w = h * iw / ih
+    sig = Image(s["sig_path"], width=w, height=h)
+    box = Table([[sig], [_p(s["name"], VALUE)], [_p(s.get("label") or "Signature", LABEL)]],
+                colWidths=[3.2 * inch], hAlign="LEFT")
+    box.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+        ("LINEBELOW", (0, 0), (0, 0), 0.8, INK),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 1), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+    ]))
+    return box
+
+
 def _certificate(meta, sig_path):
+    signers = signers_of(meta, sig_path)
+    if len(signers) > 1:
+        return _certificate_multi(meta, signers)
     img = ImageReader(sig_path)
     iw, ih = img.getSize()
     w = 2.8 * inch
@@ -100,6 +130,7 @@ def _certificate(meta, sig_path):
         ("Signed on", _when(meta["signed_at"])),
         ("IP address", meta.get("ip") or "—"),
         ("Device", meta.get("user_agent") or "—"),
+        *((("Method", meta["method"]),) if meta.get("method") else ()),
         ("Confirmation", meta["packet_ref"]),
         ("Requested by", meta["business"]),
     ]
@@ -115,9 +146,78 @@ def _certificate(meta, sig_path):
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
     ]))
     consent = _p("The signer agreed to sign electronically and confirmed that their electronic signature is "
-                 "the legal equivalent of their handwritten signature for this document.", SMALL)
+                 "the legal equivalent of their handwritten signature for this document." + SEAL_NOTE, SMALL)
     return [Spacer(1, 6), KeepTogether([sig_box]), Spacer(1, 16), _p("Signing record", H2), t,
             Spacer(1, 10), consent]
+
+
+SEAL_NOTE = (" This PDF is digitally sealed when it is created: any change made to it afterwards shows in the "
+             "Signatures panel of Adobe Acrobat Reader.")
+
+
+def _certificate_multi(meta, signers):
+    """Signing record for a document signed by two owners."""
+    boxes = [_sig_box(s) for s in signers]
+    sig_row = Table([boxes], colWidths=[3.3 * inch] * len(boxes), hAlign="LEFT")
+    sig_row.setStyle(TableStyle([("LEFTPADDING", (0, 0), (-1, -1), 0), ("VALIGN", (0, 0), (-1, -1), "BOTTOM")]))
+    details = [("Document", meta["form_name"]), ("Client", meta["client_name"])]
+    for n, s in enumerate(signers, 1):
+        details += [(f"Signer {n}", f"{s['name']} · signed {_when(s['signed_at'])}"),
+                    (f"Signer {n} IP address", s.get("ip") or "—"), (f"Signer {n} device", s.get("user_agent") or "—")]
+        if s.get("email"):
+            details.append((f"Signer {n} email", s["email"]))
+    if meta.get("method"):
+        details.append(("Method", meta["method"]))
+    details += [("Confirmation", meta["packet_ref"])]
+    if meta.get("so_number"):
+        details.append(("Sales order (SO#)", meta["so_number"]))
+    details.append(("Requested by", meta["business"]))
+    rows = [[_p(k, LABEL), _p(v, SMALL if "device" in k else VALUE)] for k, v in details]
+    if meta.get("original_sha256"):
+        rows.append([_p("Original file SHA-256", LABEL), _p(meta["original_sha256"], MONO)])
+    t = Table(rows, colWidths=[1.7 * inch, 4.8 * inch])
+    t.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.5, RULE),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    consent = _p("Each signer agreed to sign electronically and confirmed that their electronic signature is the "
+                 "legal equivalent of their handwritten signature for this document." + SEAL_NOTE, SMALL)
+    return [Spacer(1, 6), KeepTogether([sig_row]), Spacer(1, 16), _p("Signing record", H2), t, Spacer(1, 10), consent]
+
+
+def _placed_overlay(width, height, boxes, signers, local_day):
+    """Signatures, names and dates drawn where the business placed them on this page."""
+    buf = io.BytesIO()
+    c = rl_canvas.Canvas(buf, pagesize=(width, height))
+    for b in boxes:
+        idx = int(b.get("signer", 1)) - 1
+        if idx >= len(signers):
+            continue  # second-owner box on a packet with one signer: left blank
+        s = signers[idx]
+        x, w = float(b["x"]) * width, float(b["w"]) * width
+        h = float(b["h"]) * height
+        y = height - float(b["y"]) * height - h
+        if b["kind"] == "signature":
+            img = ImageReader(s["sig_path"])
+            iw, ih = img.getSize()
+            scale = min(w / iw, h / ih)
+            dw, dh = iw * scale, ih * scale
+            c.drawImage(img, x, y + (h - dh) / 2, dw, dh, mask="auto")
+        else:
+            text = s["name"] if b["kind"] == "name" else local_day(s["signed_at"])
+            size = max(6.0, min(h * 0.62, 13.0))
+            c.setFont("Helvetica", size)
+            c.setFillColor(INK)
+            while size > 6 and c.stringWidth(text, "Helvetica", size) > w:
+                size -= 0.5
+                c.setFont("Helvetica", size)
+            c.drawString(x + 1, y + max(1.5, h * 0.18), text)   # sits on the box's bottom edge, like writing on a line
+    c.save()
+    buf.seek(0)
+    return PdfReader(buf).pages[0]
 
 
 def _page_frame(meta):
@@ -236,7 +336,7 @@ def _layout_story(approval):
 
 
 def signed_document(out_path, source_pdf, body, fields, answers, sig_path, meta, specs=None, attachment=None,
-                    approval=None):
+                    approval=None, placements=None, local_day=None):
     story = [_p(meta["form_name"], H1),
              _p(f"Prepared by {meta['business']} for {meta['client_name']}", SMALL), Spacer(1, 10)]
     if approval and approval["kind"] == "layout":
@@ -284,14 +384,23 @@ def signed_document(out_path, source_pdf, body, fields, answers, sig_path, meta,
     generated = PdfReader(_build(story, meta))
 
     writer = PdfWriter()
+    signers = signers_of(meta, sig_path)
+    local_day = local_day or (lambda ts: (ts or "")[:10])
     if source_pdf:
-        stamp_text = (f"Signed electronically by {meta['signer_name']} on "
-                      f"{meta['signed_at'][:10]} · Confirmation {meta['packet_ref']}")
+        who = " and ".join(s["name"] for s in signers)
+        stamp_text = (f"Signed electronically by {who} on "
+                      f"{max(s['signed_at'] for s in signers)[:10]} · Confirmation {meta['packet_ref']}")
         if approval and approval["kind"] == "drawing":
             stamp_text = (f"{'CHANGES REQUESTED' if approval['negative'] else 'APPROVED'} by {meta['signer_name']} on "
                           f"{meta['signed_at'][:10]} · Confirmation {meta['packet_ref']}")
-        for page in PdfReader(source_pdf).pages:
+        by_page = {}
+        for b in placements or []:
+            by_page.setdefault(int(b.get("page", 0)), []).append(b)
+        for n, page in enumerate(PdfReader(source_pdf).pages):
             w, h = float(page.mediabox.width), float(page.mediabox.height)
+            if by_page.get(n) and not (page.rotation or 0) % 360:   # rotated pages: signatures stay on the record page
+                page.merge_translated_page(_placed_overlay(w, h, by_page[n], signers, local_day),
+                                           float(page.mediabox.left), float(page.mediabox.bottom))
             page.merge_page(_stamp(w, h, stamp_text))
             writer.add_page(page)
     for page in generated.pages:

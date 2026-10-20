@@ -35,11 +35,43 @@ Each company that uses FormSign gets its **own account**: its own managers and s
 - **Sign-in**: everyone signs in with their email and password. The email decides which company they belong to, so each email can only have one login.
 - **Upgrading** from the single-company version: on first start, everything already in the database becomes one company named after your old `BUSINESS_NAME` setting. Nothing else changes for those users.
 
-## Free trial (pauses on its own)
+## Two owners sign
 
-Companies that sign up themselves get a free trial (`TRIAL_DAYS`, default 14). Managers see how many days are left at the top of every page, and get an email 3 days before the end. When the trial ends, the company **pauses on its own**: its team is signed out and can't sign in, and the sign-in page tells them to contact `SUPPORT_EMAIL`. Nothing is deleted, and signing links already sent to clients keep working. You also get an email (`ADMIN_EMAIL`) naming the company.
+On the New packet page choose **Two owners must both sign** and add the second owner's name and email (or mobile). Each owner gets their own link. The second owner signs each form after the first, seeing exactly what was filled in and chosen. The packet completes only when both have signed everything. Both signatures go on the signed PDF and in the signing record. When the first owner finishes, the second owner gets a "your turn" email, and automatic reminders go to whichever owner still has forms waiting.
 
-To keep a company on, click **Mark as paid** (on the Companies screen or in the Admin Console). **+7 days trial** gives more time. Turning a paused, ended trial back on also marks it as paid. Companies you add yourself, and companies that existed before this version, are already marked as paid.
+## Photos and files from the client
+
+Tick **Ask the client for photos or files** and say what you need (for example "Photos of your sink and faucet model numbers"). The client adds them from their phone or computer while signing (photos, PDF, Word, Excel or drawings, up to 25 MB each). Adding files is optional for the client and never holds up the packet; they can also add files after signing, while their link works. Files appear on the packet page and count toward the company's storage. You can also add or change the request later from the packet page.
+
+## Bundles
+
+Management saves sets of forms you send together (for example "Kitchen job") on the Form library page. On New packet, one click ticks all the forms in the bundle.
+
+## Sign now on this device (in the showroom)
+
+**Sign now on this device**, on New packet or on any packet, lets the client sign on your tablet or computer right away. Email is optional in this case. While they sign, the device is locked to the signing pages; to get back to your screens, you enter your own password. With two owners, the second can sign right after on the same device. The signing record says the document was signed in person and who started it.
+
+## Signature boxes on your PDFs
+
+For a PDF in the library, management clicks **Place signature** and puts Signature, Printed name and Date boxes exactly where they belong on the page (for the client, or for the second owner). New packets using that form show the signatures right on the page. The signing record page is still added at the end.
+
+## Digitally sealed PDFs
+
+Every signed PDF and audit trail is digitally sealed. If anyone changes the file afterwards, Adobe Acrobat Reader's Signatures panel shows that it was changed after signing. By default the app uses its own certificate (created automatically and kept in `DATA_DIR/seal`), so Acrobat says the document is unchanged but that the signer's identity can't be verified. For a green check mark, buy a document-signing certificate from an Adobe-trusted (AATL) provider and set `SEAL_P12_BASE64` and `SEAL_P12_PASSWORD`.
+
+## Export to Excel
+
+**Export to Excel** on the Packets page downloads every packet you can see (or only the ones matching your search, optionally by date created): client, email, mobile, second owner, SO#, sales rep, dates, status, forms and files from the client.
+
+## 14-day demo (locks on its own)
+
+Companies that sign up themselves get a 14-day demo (`TRIAL_DAYS`). When you add a company yourself, tick **Start as a 14-day demo** to do the same (it's ticked by default). Managers see the days left at the top of every page and get an email 3 days before the end. When the demo ends, the company **locks on its own**: its team is signed out and can't sign in, and the sign-in page tells them to contact `SUPPORT_EMAIL`. Nothing is deleted, and signing links already sent to clients keep working. You get an email (`ADMIN_EMAIL`) naming the company.
+
+**+14 days demo** (on the Companies screen or in the Admin Console) unlocks the company for another 14 days; you can do this as many times as you like. **Mark as paid** keeps it on for good.
+
+## Invoices (for the platform owner)
+
+The Admin Console has a **Billing** page for every company to record the invoices you send and whether each one has been paid. The invoices are stored in this app's database, are visible only through the Admin Console (never to the company), and count nothing toward the company's storage. `INVOICE_DEFAULT_AMOUNT` (default 185.00) and `INVOICE_CURRENCY` (default CAD) set the amount suggested for a new invoice.
 
 ## Automatic reminders
 
@@ -157,8 +189,11 @@ With email on, you can send packets and reminders from the app, and the client, 
 | `ALLOW_SIGNUP` | no | `1` lets companies create their own account (default), `0` means only you add them |
 | `INCLUDED_STORAGE_GB` | no | Storage included for each new company (default 25) |
 | `ADMIN_API_TOKEN` | no | Turns on the private API used by the Admin Console (long random value) |
-| `TRIAL_DAYS` | no | Length of the free trial for companies that sign up themselves (default 14) |
-| `SUPPORT_EMAIL` | recommended | Who companies contact to keep using the app after the trial (for example liz@helmmsp.ca) |
+| `SEAL_P12_BASE64` / `SEAL_P12_PASSWORD` | no | A purchased document-signing certificate (.p12/.pfx, base64-encoded) for sealing PDFs |
+| `SEAL` | no | `0` turns off PDF sealing |
+| `TRIAL_DAYS` | no | Length of the demo (default 14) |
+| `INVOICE_DEFAULT_AMOUNT` / `INVOICE_CURRENCY` | no | Suggested amount and currency for new invoices in the Admin Console (default 185.00 CAD) |
+| `SUPPORT_EMAIL` | recommended | Who companies contact to keep using the app after the demo (for example liz@helmmsp.ca) |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM` | no | Turn on text messages |
 | `REMINDER_CHECK_SECONDS` | no | How often the app checks for reminders and ended trials (default 300) |
 | `STORAGE_CHECK` | no | `0` hides the storage warning; `1` checks even off Render |
@@ -182,6 +217,4 @@ With email on, you can send packets and reminders from the app, and the client, 
 
 ## Ideas for later
 
-- Place the signature on a specific spot on the PDF page instead of a certificate page
 - Multiple signers per packet (e.g. two company directors), signing order
-- Client-uploaded attachments (ID, documents)

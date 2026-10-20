@@ -363,3 +363,31 @@ textarea#body { font-family: var(--font-body); line-height: 1.5; }
 .brand-preview { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
   border: 1px solid var(--rule); border-radius: var(--radius); padding: 14px 16px; background: var(--bg); }
 .brand-preview img { max-height: 44px; max-width: 200px; }
+.kiosk-bar { display: flex; justify-content: space-between; gap: 12px; padding: 8px 16px; font-size: 13px;
+  background: var(--accent-soft); color: var(--ink); border-bottom: 1px solid var(--rule); }
+.kiosk-bar a { font-weight: 600; }
+
+/* ---------- signature box placement ---------- */
+.place-layout { display: grid; grid-template-columns: 240px 1fr; gap: 20px; align-items: start; }
+.place-tools { position: sticky; top: 16px; }
+.place-tools .tool { display: flex; width: 100%; justify-content: flex-start; margin-bottom: 6px; }
+.place-tools .tool.active { outline: 2px solid var(--accent); }
+.place-page { position: relative; margin: 0 auto 18px; box-shadow: 0 1px 4px rgba(0,0,0,.18); background: #fff; max-width: 860px; }
+.place-page img { display: block; width: 100%; height: auto; user-select: none; -webkit-user-drag: none; }
+.place-page.rotated::after { content: "This page is rotated, so boxes can't be placed on it"; position: absolute; inset: 0;
+  display: grid; place-items: center; background: rgba(255,255,255,.75); font-weight: 600; color: var(--muted); }
+.place-page.armed { cursor: crosshair; }
+.pbox { position: absolute; border: 2px dashed; border-radius: 3px; font: 600 11px/1.1 var(--font-body); padding: 2px 4px;
+  overflow: hidden; cursor: move; touch-action: none; display: flex; align-items: flex-end; }
+.pbox.s1 { border-color: #2f5bd3; background: rgba(47,91,211,.12); color: #1e3f9e; }
+.pbox.s2 { border-color: #c27803; background: rgba(194,120,3,.12); color: #8a5300; }
+.pbox .del { position: absolute; top: 1px; right: 2px; border: 0; background: none; color: inherit; font-size: 14px; cursor: pointer; line-height: 1; }
+.pbox .grip { position: absolute; right: 0; bottom: 0; width: 12px; height: 12px; cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 50%, currentColor 50%); opacity: .6; }
+@media (max-width: 760px) { .place-layout { grid-template-columns: 1fr; } .place-tools { position: static; } }
+.export-box { position: relative; }
+.export-box > summary { list-style: none; }
+.export-box > summary::-webkit-details-marker { display: none; }
+.bundle-edit > summary { list-style: none; }
+.bundle-edit > summary::-webkit-details-marker { display: none; }
+.bundle-edit[open] { flex-basis: 100%; }

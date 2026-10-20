@@ -4,6 +4,13 @@
 <div class="page-head">
   <div><span class="eyebrow">{{ 'All packets · every user' if is_manager else 'Your packets' }}</span><h1>Who still needs to sign</h1>
   {% if not is_manager %}<p class="muted small">Showing the packets you created.</p>{% endif %}</div>
+  <details class="export-box"><summary class="btn">Export to Excel</summary>
+    <form method="get" action="{{ url_for('export_packets') }}" class="stack panel" style="gap:8px;position:absolute;right:0;z-index:5;min-width:280px;margin-top:6px">
+      {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}{% if rep %}<input type="hidden" name="rep" value="{{ rep }}">{% endif %}
+      <span class="small muted">{{ 'Packets matching your search' if q or rep else 'All packets you can see' }}, optionally by date created:</span>
+      <div class="grid-2" style="gap:8px"><label class="small">From<input type="date" name="from"></label><label class="small">To<input type="date" name="to"></label></div>
+      <button class="btn btn-primary">Download spreadsheet</button>
+    </form></details>
 </div>
 
 <div class="stats">

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Place signature boxes{% endblock %}
+{% block content %}
+<div class="page-head"><div><a href="{{ url_for('library') }}" class="small">← Form library</a><h1>Place signature boxes</h1>
+<p class="muted">{{ t.name }} · {{ pages|length }} page{{ 's' if pages|length != 1 }}. Put the signature, printed name and date exactly where they belong on the page. The signing record page is still added at the end.</p></div></div>
+<div class="place-layout">
+  <aside class="panel place-tools stack" style="gap:10px">
+    <h3>1. Who signs here?</h3>
+    <div class="stack" style="gap:4px">
+      <label class="check"><input type="radio" name="who" value="1" checked> Client (owner 1)</label>
+      <label class="check"><input type="radio" name="who" value="2"> Second owner</label>
+      <span class="muted small">Second-owner boxes are filled only when a packet has two owners; otherwise they stay blank.</span>
+    </div>
+    <h3>2. Add a box</h3>
+    <div>
+      {% for k, label in box_kinds.items() %}<button type="button" class="btn tool" data-kind="{{ k }}">+ {{ label }}</button>{% endfor %}
+    </div>
+    <p class="muted small" id="place-help">Pick a box, then click on the page where it goes. Drag a box to move it; drag its corner to resize; × removes it.</p>
+    <form method="post" id="place-form" class="stack" style="gap:8px">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <input type="hidden" name="placements_json" id="placements_json">
+      <button class="btn btn-primary">Save boxes</button>
+      <span class="muted small" id="box-count"></span>
+    </form>
+  </aside>
+  <div id="pages">
+    {% for pg in pages %}
+    <div class="place-page {{ 'rotated' if pg.rotated }}" data-page="{{ loop.index0 }}" style="aspect-ratio: {{ pg.w }} / {{ pg.h }}">
+      <img src="{{ url_for('template_page', tid=t.id, n=loop.index0) }}" alt="Page {{ loop.index }}" loading="{{ 'eager' if loop.index0 < 2 else 'lazy' }}" draggable="false">
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>window.PLACE_BOXES = {{ boxes|tojson }}; window.BOX_LABELS = {{ box_kinds|tojson }};</script>
+<script src="{{ url_for('static', filename='place.js') }}"></script>
+{% endblock %}

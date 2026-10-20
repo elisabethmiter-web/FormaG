@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% set labels = {'draft':'Draft','sent':'Sent','viewed':'Opened','in_progress':'In progress','completed':'Signed','expired':'Expired','voided':'Cancelled'} %}
-{% set ev = {'created':'Packet created','sent':'Sent','viewed':'Opened by client','signed':'Signed','completed':'Completed','voided':'Cancelled','extended':'Link extended','reminder':'Reminder','receipt_emailed':'Confirmation emailed','email_failed':'Email failed','details':'Details updated','followup':'Follow-up','downloaded':'Downloaded by client','confirmed':'Confirmed receipt','text_failed':'Text failed'} %}
+{% set ev = {'created':'Packet created','sent':'Sent','viewed':'Opened by client','signed':'Signed','completed':'Completed','voided':'Cancelled','extended':'Link extended','reminder':'Reminder','receipt_emailed':'Confirmation emailed','email_failed':'Email failed','details':'Details updated','followup':'Follow-up','downloaded':'Downloaded by client','confirmed':'Confirmed receipt','text_failed':'Text failed','uploaded':'Files from client'} %}
 {% block title %}{{ p.client_name }}{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -31,6 +31,7 @@
     {% if sms_enabled and p.client_phone %}
     <form method="post" action="{{ url_for('text_packet_view', pid=p.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn">Text the link</button></form>
     {% endif %}
+    <form method="post" action="{{ url_for('in_person', pid=p.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn" title="Your client signs on this device now">Sign now on this device</button></form>
     <form method="post" action="{{ url_for('extend_packet', pid=p.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn btn-quiet">Extend link</button></form>
     <form method="post" action="{{ url_for('void_packet', pid=p.id) }}" data-confirm="Cancel this packet? The link will stop working and can't be reopened."><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn btn-quiet btn-danger">Cancel packet</button></form>
   </div>
@@ -75,6 +76,8 @@
     </div>
     {% if p.message %}<div class="stack" style="gap:4px"><span class="eyebrow">Your note</span><p style="white-space:pre-wrap">{{ p.message }}</p></div>{% endif %}
   </section>
+
+  {% include "_packet_more.html" %}
 
   <section class="panel followups" id="followups">
     <div class="panel-head"><h2>Follow-ups &amp; notes</h2>

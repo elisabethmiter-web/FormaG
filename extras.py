@@ -5,8 +5,9 @@
 * auto reminders    emails (and texts) clients who haven't finished signing, on each company's schedule
 * branding          each company's logo and colour on client signing pages and client emails
 * text messages     send the signing link and reminders by SMS through Twilio (see sms.py)
-* free trial        companies that sign up themselves get TRIAL_DAYS days; the account pauses on its own
-                    when the trial ends, until the platform owner marks it as paid or extends the trial
+* 14-day demo       companies that sign up themselves (and companies the owner starts as a demo) get TRIAL_DAYS
+                    days; the account locks on its own when the demo ends, until the platform owner gives it
+                    another 14 days or marks it as paid
 """
 import hashlib
 import io
@@ -114,7 +115,7 @@ def trial_days_left(c):
 def paused_message(company, platform):
     if company and company.get("paused_reason") == "trial_ended":
         who = f" contact {SUPPORT_EMAIL}" if SUPPORT_EMAIL else f" contact {platform}"
-        return f"Your company's free trial has ended. To keep using {platform},{who}. Nothing has been deleted."
+        return f"Your company's {TRIAL_DAYS}-day demo has ended. To keep using {platform},{who}. Nothing has been deleted."
     return f"Your company's {platform} account is paused. Contact {platform} to turn it back on."
 
 
@@ -124,23 +125,23 @@ def owner_action(conn, company_id, action, days=None):
     c = conn.execute("SELECT * FROM companies WHERE id=?", (company_id,)).fetchone()
     if action == "mark_paid":
         conn.execute("UPDATE companies SET plan='paid', status='active', paused_reason='' WHERE id=?", (company_id,))
-        return f"{c['name']} is marked as paid and active. It no longer has a trial end date."
+        return f"{c['name']} is marked as paid and active. It no longer has a demo end date."
     if action == "extend_trial":
         try:
-            days = max(1, min(int(days or 7), 365))
+            days = max(1, min(int(days or TRIAL_DAYS), 365))
         except (TypeError, ValueError):
-            days = 7
+            days = TRIAL_DAYS
         start = max(parse(c["trial_ends_at"]) or utcnow(), utcnow())
         end = start + timedelta(days=days)
         conn.execute("UPDATE companies SET plan='trial', trial_ends_at=?, trial_notice_at=NULL, status='active', "
                      "paused_reason='' WHERE id=?", (iso(end), company_id))
-        return f"{c['name']}'s trial now ends {end.strftime('%b %d, %Y')}. Its team can sign in."
+        return f"{c['name']}'s demo now ends {end.strftime('%b %d, %Y')} ({days} more days). Its team can sign in."
     if action == "activate":
-        # turning on a company whose trial already ended means it's now a paying customer
+        # turning on a company whose demo already ended means it's now a paying customer
         if c["plan"] == "trial" and (parse(c["trial_ends_at"]) or utcnow()) <= utcnow():
             conn.execute("UPDATE companies SET plan='paid', status='active', paused_reason='' WHERE id=?",
                          (company_id,))
-            return f"{c['name']} is active again and marked as paid (its trial had ended)."
+            return f"{c['name']} is active again and marked as paid (its demo had ended)."
         conn.execute("UPDATE companies SET status='active', paused_reason='' WHERE id=?", (company_id,))
         return None
     if action == "suspend":
@@ -201,6 +202,7 @@ def register(A):
     def extras_before():
         if not state["base"] and request.url_root:
             state["base"] = request.url_root.rstrip("/")   # for links in background emails when BASE_URL is empty
+            A.BACKGROUND_BASE = state["base"]
         if state["thread"] is None and not app.config.get("EXTRAS_NO_THREAD"):
             state["thread"] = threading.Thread(target=_loop, daemon=True, name="reminders")
             state["thread"].start()
@@ -225,6 +227,8 @@ def register(A):
                 with app.app_context():
                     expire_trials(db())
                     run_reminders(db())
+                    if hasattr(A, "run_cosigner_reminders"):
+                        A.run_cosigner_reminders(db())
             except Exception:  # noqa: BLE001
                 app.logger.exception("Background reminders check failed; will try again")
             time.sleep(CHECK_SECONDS)
@@ -243,8 +247,8 @@ def register(A):
                 contact = f"reply to this email or contact {SUPPORT_EMAIL}" if SUPPORT_EMAIL else "reply to this email"
                 for to in managers_of(conn, c["id"]):
                     try:
-                        A.mailer.send_notice(to, f"{A.PLATFORM_NAME}: your free trial ends {end}", [
-                            f"Your {A.PLATFORM_NAME} free trial for {c['name']} ends on {end}.",
+                        A.mailer.send_notice(to, f"{A.PLATFORM_NAME}: your demo ends {end}", [
+                            f"Your {A.PLATFORM_NAME} demo for {c['name']} ends on {end}.",
                             f"To keep sending packets after that, {contact}. Your forms, packets and signed copies "
                             f"stay safe either way."], reply_to=SUPPORT_EMAIL or None)
                     except Exception as exc:  # noqa: BLE001
@@ -262,19 +266,19 @@ def register(A):
             contact = f"contact {SUPPORT_EMAIL}" if SUPPORT_EMAIL else "reply to this email"
             for to in managers_of(conn, c["id"]):
                 try:
-                    A.mailer.send_notice(to, f"{A.PLATFORM_NAME}: your free trial has ended", [
-                        f"Your {A.PLATFORM_NAME} free trial for {c['name']} has ended, so your team's sign-in is "
-                        f"paused.", f"To continue, {contact}. Nothing has been deleted, and signing links already "
+                    A.mailer.send_notice(to, f"{A.PLATFORM_NAME}: your demo has ended", [
+                        f"Your {A.PLATFORM_NAME} demo for {c['name']} has ended, so your team's sign-in is "
+                        f"locked.", f"To continue, {contact}. Nothing has been deleted, and signing links already "
                         f"sent to your clients keep working."], reply_to=SUPPORT_EMAIL or None)
                 except Exception as exc:  # noqa: BLE001
                     app.logger.warning("Trial-ended notice to %s failed: %s", to, exc)
             owner = A.mailer.admin_email()
             if owner:
                 try:
-                    A.mailer.send_notice(owner, f"Trial ended: {c['name']}", [
-                        f"{c['name']}'s free trial ended and the company is now paused.",
+                    A.mailer.send_notice(owner, f"Demo ended: {c['name']}", [
+                        f"{c['name']}'s demo ended and the company is now locked.",
                         f"Manager: {', '.join(managers_of(conn, c['id'])) or 'none'}.",
-                        "Mark it as paid or extend the trial from the Companies screen or the Admin Console."])
+                        "Give it another 14 days or mark it as paid from the Companies screen or the Admin Console."])
                 except Exception as exc:  # noqa: BLE001
                     app.logger.warning("Trial-ended notice to owner failed: %s", exc)
 
@@ -387,6 +391,8 @@ def register(A):
         A.log_event(pid, "sent", f"by text to {sms.pretty(p['client_phone'])} · by {A.actor()}")
         db().commit()
         flash(f"Texted to {sms.pretty(p['client_phone'])}.", "ok")
+        if hasattr(A, "notify_cosigners"):
+            A.notify_cosigners(pid, "text")
         return True
 
     A.text_packet = text_packet

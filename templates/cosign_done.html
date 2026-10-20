@@ -1,0 +1,19 @@
+{% extends "client_base.html" %}
+{% block title %}All done{% endblock %}
+{% block content %}
+<section class="panel receipt">
+  <div class="seal"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+  <h1>All done, thank you</h1>
+  <p class="muted" style="max-width:52ch">You and {{ p.client_name }} have both signed. {{ 'A copy has been emailed to ' ~ s.email ~ '.' if email_enabled and s.email else 'Download copies below for your records.' }}</p>
+  <span class="ref">Confirmation {{ packet_ref(p) }}</span>
+</section>
+<section class="panel">
+  <h2>Your signed copies</h2>
+  <div class="doc-list">
+  {% for it in items %}{% if it.id in done %}
+    <div class="doc-row"><div class="doc-main"><strong>{{ it.template_name }}</strong><span class="small muted">Signed by {{ it.signer_name }} and {{ s.name }}</span></div>
+      <a class="btn" href="{{ url_for('cosign_signed', token=s.token, iid=it.id) }}">Signed PDF</a></div>
+  {% endif %}{% endfor %}
+  </div>
+</section>
+{% endblock %}
