@@ -1,6 +1,15 @@
 {# Buttons that open the staff member's own email or phone with the message ready. Needs: p, qs (quick_message), kind, who #}
-<div class="quick-send" data-nudge="{{ url_for('packet_nudge', pid=p.id) }}" data-kind="{{ kind }}" data-who="{{ who or '' }}">
-  <a class="btn {{ 'btn-primary' if primary }}" href="{{ qs.mailto }}" data-via="email" title="{{ 'Opens your email with the message ready' if qs.email else 'Opens your email; add the address' }}">✉ Open in my email</a>
-  <a class="btn" href="{{ qs.sms }}" data-via="phone" title="On a phone: opens your text messages with the message ready">💬 Text from my phone</a>
-  <button type="button" class="btn btn-quiet" data-via="copy" data-text="{{ qs.body }}">Copy message</button>
+<div class="quick-send" data-nudge="{{ url_for('packet_nudge', pid=p.id) }}" data-kind="{{ kind }}" data-who="{{ who or '' }}" data-setapp="{{ url_for('set_email_app') }}"
+     data-html="{{ qs.html }}" data-text="{{ qs.body }}" data-short="{{ qs.short }}" data-qr="{{ qs.qr }}">
+  <span class="qs-email">
+    <a class="btn {{ 'btn-primary' if primary }}" href="{{ qs.compose }}" data-paste="{{ qs.compose_paste }}" data-via="email" data-main="1"{% if qs.compose_web %} target="_blank" rel="noopener"{% endif %} title="Opens a new email to {{ qs.email or 'your client' }} and copies the message with a clickable link to paste in">✉ Open in Email</a>
+    <details class="qs-more"><summary class="btn {{ 'btn-primary' if primary }}" aria-label="Choose which email opens" title="Choose which email opens">▾</summary>
+      <div class="qs-menu">
+        <span class="small muted">Open in:</span>
+        {% for o in qs.others %}<a href="{{ o.url }}" data-paste="{{ o.paste }}" data-via="email" data-app="{{ o.key }}"{% if o.key != 'app' %} target="_blank" rel="noopener"{% endif %}>{{ EMAIL_APPS[o.key][1] }}</a>{% endfor %}
+        <span class="small muted">The one you pick becomes your default.</span>
+      </div></details>
+  </span>
+  <a class="btn" href="{{ qs.sms }}" data-via="phone" title="Opens your text messages with the message ready (on a computer: scan a code with your phone)">💬 Text from my phone</a>
+  <button type="button" class="btn btn-quiet" data-via="copy">Copy message</button>
 </div>

@@ -50,6 +50,17 @@
 {% include "_flash.html" %}
 {% block content %}{% endblock %}
 </main>
+{% if support_chat %}
+<div id="sc" class="sc" data-url="{{ url_for('support_chat') }}" data-unread-url="{{ url_for('support_unread') }}" data-me="{{ current_user.name }}">
+  <button type="button" class="sc-toggle" aria-expanded="false" aria-controls="sc-panel">💬 Support{% if support_unread %}<span class="sc-badge">{{ support_unread }}</span>{% else %}<span class="sc-badge" hidden></span>{% endif %}</button>
+  <section id="sc-panel" class="sc-panel" hidden aria-label="Support chat">
+    <header><div><strong>Support</strong><span class="small">{{ support_name or 'Helm MSP' }} · {{ support_hours }}</span></div><button type="button" class="sc-close" aria-label="Close">×</button></header>
+    <div class="sc-log" aria-live="polite"><p class="sc-hello">Hi {{ current_user.name.split(' ')[0] }}! Ask a question or tell us what went wrong, and we'll answer here. You can close this and keep working: the <strong>Support</strong> button shows when there's an answer.{% if support_email %} You can also email <a href="mailto:{{ support_email }}">{{ support_email }}</a>.{% endif %}</p></div>
+    <form class="sc-form"><textarea name="body" rows="2" maxlength="2000" placeholder="Type your message…" aria-label="Your message" required></textarea><button class="btn btn-primary">Send</button></form>
+  </section>
+</div>
+<script src="{{ url_for('static', filename='support.js') }}"></script>
+{% endif %}
 {% block scripts %}{% endblock %}
 {% if in_company %}<script src="{{ url_for('static', filename='alerts.js') }}"></script>{% endif %}
 </body>

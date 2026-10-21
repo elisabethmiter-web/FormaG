@@ -2,49 +2,113 @@
 {% block title %}Help{% endblock %}
 {% block content %}
 <div class="page-head"><div><span class="eyebrow">Help</span><h1>How to use {{ platform_name }}</h1>
-<p class="muted">The essentials in two minutes.{% if help_video_url %} Prefer to watch? <a href="{{ help_video_url }}" target="_blank" rel="noopener">See the how-it-works video</a>.{% endif %}</p></div></div>
+<p class="muted">Everything in a few minutes.{% if help_video_url %} Prefer to watch? <a href="{{ help_video_url }}" target="_blank" rel="noopener">See the how-it-works video</a>.{% endif %} Stuck? <a href="#contact">Contact us or use the support chat</a>.</p></div></div>
+
+<nav class="help-toc small" aria-label="Help topics">
+  <a href="#send">Send forms</a> · <a href="#text">Text a client</a> · <a href="#in-person">Sign in person</a> · <a href="#owners">Two owners</a> · <a href="#files">Photos &amp; files</a>{% if has_approvals %} · <a href="#approvals">Layouts &amp; drawings</a>{% endif %} · <a href="#track">Keep track</a> · <a href="#signed">Signed copies</a> · <a href="#private">Privacy</a> · <a href="#managers">For managers</a> · <a href="#account">Your account</a> · <a href="#contact">Support</a> · <a href="#problems">Problems</a>
+</nav>
+
 <div class="help-grid">
-<section class="panel stack help-card">
+<section class="panel stack help-card" id="send">
   <h2>1. Send forms to a client</h2>
   <ol class="small">
-    <li>Click <strong>New packet</strong>, type the client's name (earlier clients are suggested as you type).</li>
-    <li>Tick the forms, or click a <strong>bundle</strong> to tick a set in one go. Add one-off files if needed.{% if has_approvals %} For a stone &amp; seam layout choice or a template drawing, use those sections.{% endif %}</li>
-    <li>Click <strong>Create signing link</strong>, then <strong>Open in my email</strong> or <strong>Text from my phone</strong>: your own email or phone opens with the message ready. Or <strong>Copy message</strong> and paste it anywhere.</li>
+    <li>Click <strong>New packet</strong> and type the client's name: clients you've sent to before are suggested, with their email.</li>
+    <li>Tick the forms, or click a <strong>bundle</strong> to tick a set in one go. Add one-off files if needed.{% if has_approvals %} Add the SO# and sales rep for your records.{% endif %}</li>
+    <li>Click <strong>✉ Create and open in Email</strong>. On the packet page, click <strong>✉ Open in Email</strong>: a new email to your client opens with the subject filled in, and the message is copied.</li>
+    <li>Click in the message area and press <strong>Ctrl+V</strong> (<strong>⌘V</strong> on a Mac). The message appears with a button named after your company and the forms (for example "{{ g.company.name if g.company else 'Your company' }} – Deposit Terms") instead of a long web address. Check it and press <strong>Send</strong>.</li>
   </ol>
+  <p class="small muted">Other ways: <strong>Copy message</strong> copies the same message to paste anywhere; <strong>Create signing link</strong> just makes the link; the ▾ next to Open in Email picks Outlook, Gmail or your computer's email app.</p>
 </section>
-<section class="panel stack help-card">
-  <h2>2. Client in front of you?</h2>
-  <p class="small">Click <strong>Sign now on this device</strong>. The tablet shows only the signing pages; when they're done, enter your password to get back to your screens.</p>
-</section>
-<section class="panel stack help-card">
-  <h2>3. Keep track</h2>
+
+<section class="panel stack help-card" id="text">
+  <h2>2. Text a client</h2>
   <ul class="small">
-    <li>The <strong>Packets</strong> page shows who has opened and signed, and <strong>New since your last visit</strong> lists what changed. Turn on <strong>desktop alerts</strong> there to get a pop-up while the app is open.</li>
-    <li><strong>Follow-up</strong> lists who to remind today, with the reminder ready to send.</li>
-    <li>Record calls and notes in <strong>Follow-ups &amp; notes</strong> on each packet.</li>
+    <li><strong>On a phone:</strong> tap <strong>💬 Text from my phone</strong>. Your Messages app opens with the text and link ready; pick the client and send.</li>
+    <li><strong>On a computer:</strong> click <strong>💬 Text from my phone</strong> and scan the code it shows with your phone's camera. Your phone opens a page with <strong>Open in Messages</strong>. The code works for 30 minutes. On a Mac you can also use <strong>Open Messages on this Mac</strong>.</li>
+    <li>Text messages show the full web address; that's normal for texts.</li>
   </ul>
 </section>
-<section class="panel stack help-card">
-  <h2>4. Two owners</h2>
-  <p class="small">Choose <strong>Two owners must both sign</strong>. Each owner gets their own link; the second signs after the first. The packet page and Follow-up show when it's the second owner's turn.</p>
+
+<section class="panel stack help-card" id="in-person">
+  <h2>3. Client in front of you?</h2>
+  <p class="small">Click <strong>Sign now on this device</strong> (on New packet or any packet). The tablet or computer shows only the signing pages, so the client can't see anything else. When they're done, enter <strong>your</strong> password to get back to your screens. No access code or email is needed.</p>
 </section>
-<section class="panel stack help-card">
-  <h2>5. Signed copies</h2>
-  <p class="small">When everyone has signed, the packet shows <strong>Signed</strong>. Use <strong>Download all</strong> for the signed PDFs, the audit trail and any files from the client in one ZIP. Clients download theirs from their link at any time.</p>
+
+<section class="panel stack help-card" id="owners">
+  <h2>4. Two owners must sign</h2>
+  <p class="small">On New packet choose <strong>Two owners must both sign</strong> and add the second owner. Each owner gets their own link: send the second owner theirs from the <strong>Second owner</strong> section of the packet. The second signs after the first and sees what was filled in. The dashboard and Follow-up show <strong>"Waiting on …"</strong> so you know who to call. With <strong>Sign now on this device</strong>, both can sign one after the other.</p>
 </section>
-<section class="panel stack help-card">
-  <h2>6. Keeping documents private</h2>
-  <p class="small">Tick <strong>Require an access code</strong> on New packet for sensitive packets. Give the 4-digit code to the client by phone or in person, never in the same message as the link.</p>
+
+<section class="panel stack help-card" id="files">
+  <h2>5. Photos and files from the client</h2>
+  <p class="small">Tick <strong>Ask the client for photos or files</strong> and say what you need (for example "photos of your sink and faucet model numbers"). The client adds them from their phone or computer while signing. It's optional for them and never holds up the packet. Files appear on the packet page; you can add or change the request later from there.</p>
 </section>
-<section class="panel stack help-card">
-  <h2>7. Is a signed PDF genuine?</h2>
-  <p class="small">Anyone can upload a signed PDF at <a href="{{ url_for('verify') }}" target="_blank">{{ url_for('verify', _external=True) }}</a> to check it's authentic and unchanged.</p>
-</section>
-<section class="panel stack help-card">
-  <h2>8. Questions and problems</h2>
+
+{% if has_approvals %}
+<section class="panel stack help-card" id="approvals">
+  <h2>6. Layouts and template drawings</h2>
   <ul class="small">
-    <li><strong>Forgot your password?</strong> Ask a manager to reset it from the Team page.{% if support_name or support_phone or support_email %} Managers: contact {{ support_name or 'support' }}{% if support_phone %} at {{ support_phone }}{% endif %}{% if support_email %} or {{ support_email }}{% endif %}.{% endif %}</li>
-    <li><strong>Client lost the link?</strong> Open the packet and send it again; use <strong>Extend link</strong> if it expired.</li>
+    <li><strong>Layout approval (Option A / B)</strong>: add the stone and seam layout options; the client picks one and approves it.</li>
+    <li><strong>Template drawing</strong>: send the drawing for approval. Each updated drawing gets the next revision (Rev 1, Rev 2…) with a note on what changed. The client approves it or asks for changes.</li>
+    <li>The <strong>Plumbing &amp; appliance spec form</strong> collects sink, faucet and appliance details from the client.</li>
+  </ul>
+</section>
+{% endif %}
+
+<section class="panel stack help-card" id="track">
+  <h2>{{ 7 if has_approvals else 6 }}. Keep track</h2>
+  <ul class="small">
+    <li>The <strong>Packets</strong> page shows Sent → Opened → In progress → Signed. <strong>New since your last visit</strong> lists what changed, and the menu shows a count.</li>
+    <li>Click <strong>Turn on alerts</strong> on the Packets page to get a pop-up when a client opens or signs, while the app is open in a tab.</li>
+    <li><strong>Follow-up</strong> lists who needs a nudge today: overdue, not opened in 2 days, opened but not finished, or waiting on the second owner. Each has the reminder ready in one click; once you've reminded someone, they move to <strong>Already reminded today</strong>.</li>
+    <li>Clients have 48 hours to sign; late packets turn orange. Record calls and notes in <strong>Follow-ups &amp; notes</strong> on each packet.</li>
+    <li>Times show in your company's time zone.</li>
+  </ul>
+</section>
+
+<section class="panel stack help-card" id="signed">
+  <h2>{{ 8 if has_approvals else 7 }}. Signed copies</h2>
+  <ul class="small">
+    <li>When everyone has signed, the packet shows <strong>Signed</strong>. <strong>Download all</strong> gives one ZIP with the signed PDFs, the audit trail and the client's files.</li>
+    <li>Clients download theirs from their link at any time; ask them to keep it.</li>
+    <li>Every signed PDF is digitally sealed. Anyone can check one is genuine and unchanged at <a href="{{ url_for('verify') }}" target="_blank">{{ url_for('verify', _external=True) }}</a>. Adobe may say the signer's identity is "unknown": that's expected, and the signing record page explains it.</li>
+  </ul>
+</section>
+
+<section class="panel stack help-card" id="private">
+  <h2>{{ 9 if has_approvals else 8 }}. Keeping documents private</h2>
+  <p class="small">Tick <strong>Require an access code</strong> on New packet (or turn it on from the packet). The client must enter a 4-digit code to open their link. Give it by phone or in person, <strong>never in the same message as the link</strong>. After 5 wrong tries the link waits 15 minutes. You can make a new code or turn it off on the packet page.</p>
+</section>
+
+<section class="panel stack help-card" id="managers">
+  <h2>{{ 10 if has_approvals else 9 }}. For managers</h2>
+  <ul class="small">
+    <li><strong>Form library</strong>: upload PDFs or Word/Excel files, or build fillable forms. <strong>Place signature</strong> puts Signature, Name and Date boxes exactly where they belong on a PDF.</li>
+    <li><strong>Bundles</strong>: save sets of forms you send together (for example "Kitchen job").</li>
+    <li><strong>Team</strong>: add staff and managers, reset a password, or remove someone.</li>
+    <li><strong>Company</strong>: your company name, logo and colour (shown to clients), time zone, and storage used.</li>
+    <li><strong>Export to Excel</strong> on the Packets page: every packet with its status and dates, for reports.</li>
+  </ul>
+</section>
+
+<section class="panel stack help-card" id="account">
+  <h2>{{ 11 if has_approvals else 10 }}. Your account</h2>
+  <p class="small">Click your name at the top to change your password and choose where <strong>Open in Email</strong> opens: the email app on your computer (Outlook, Apple Mail), Outlook on the web (Microsoft 365), Gmail, or Outlook.com. <a href="{{ url_for('account') }}#email-app">Open your account</a>.</p>
+</section>
+
+<section class="panel stack help-card" id="contact">
+  <h2>{{ 12 if has_approvals else 11 }}. Questions? Contact us</h2>
+  <p class="small"><strong>Contact <a href="mailto:{{ support_email or 'liz@helmmsp.ca' }}">{{ support_email or 'liz@helmmsp.ca' }}</a> or use the support chat.</strong> Click <strong>💬 Support</strong> at the bottom-right of any page{% if support_chat %} (or <a href="#" onclick="document.querySelector('#sc .sc-toggle').click();return false">open it now</a>){% endif %}, type your question and press Enter. You can close the chat and keep working: the Support button shows a red number when there's an answer.{% if support_hours %} Hours: {{ support_hours }}.{% endif %}</p>
+</section>
+
+<section class="panel stack help-card" id="problems">
+  <h2>{{ 13 if has_approvals else 12 }}. Common problems</h2>
+  <ul class="small">
+    <li><strong>Pressed Ctrl+V and nothing appeared?</strong> Click inside the message area first. Or go back and click <strong>Copy message</strong>, then paste again.</li>
+    <li><strong>Text from my phone does nothing on a computer?</strong> Use the code it shows and scan it with your phone.</li>
+    <li><strong>Forgot your password?</strong> Ask a manager to reset it from the Team page.</li>
+    <li><strong>Client lost the link or it expired?</strong> Open the packet, click <strong>Extend link</strong> if needed, and send it again.</li>
+    <li><strong>Client can't open the link?</strong> If it asks for a code, give them the access code from the packet page.</li>
     <li><strong>Page says the service is restarting?</strong> Wait a minute: the client's signature stays on the page and is sent automatically.</li>
   </ul>
 </section>

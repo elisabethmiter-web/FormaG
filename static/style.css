@@ -409,3 +409,49 @@ textarea#body { font-family: var(--font-body); line-height: 1.5; }
 .help-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
 .help-card ol, .help-card ul { margin: 0; padding-left: 18px; }
 .help-card li { margin: 4px 0; }
+
+/* "Open in my email" with a ▾ for other email services */
+.qs-email { display: inline-flex; position: relative; }
+.qs-email > .btn { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.qs-more > summary { list-style: none; border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 1px; padding-left: 10px; padding-right: 10px; height: 100%; }
+.qs-more > summary::-webkit-details-marker { display: none; }
+.qs-menu { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; min-width: 300px; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.12); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.qs-menu a { text-decoration: none; }
+.qs-menu a:hover { text-decoration: underline; }
+
+/* copied-message notice, phone code dialog */
+#qs-toast { position: fixed; z-index: 50; left: 50%; bottom: 24px; transform: translateX(-50%); max-width: min(560px, calc(100vw - 32px)); background: #12203f; color: #fff; padding: 14px 18px; border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,.25); font-size: .95rem; line-height: 1.45; cursor: pointer; }
+#qs-toast kbd { background: rgba(255,255,255,.15); border-radius: 4px; padding: 1px 6px; font-family: inherit; }
+.qs-dialog { border: 1px solid var(--rule); border-radius: 12px; padding: 22px; max-width: 380px; width: calc(100vw - 32px); }
+.qs-dialog::backdrop { background: rgba(15,23,42,.45); }
+.qs-dialog h2 { margin: 0 0 6px; }
+.qs-dialog img { display: block; margin: 12px auto; background: #fff; padding: 8px; border-radius: 8px; }
+.qs-dialog .qs-short { word-break: break-word; }
+.qs-pulse { animation: qs-pulse 1.2s ease-in-out 3; }
+@keyframes qs-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(31,58,138,.5); } 50% { box-shadow: 0 0 0 8px rgba(31,58,138,0); } }
+
+/* support chat */
+.sc { position: fixed; right: 20px; bottom: 20px; z-index: 40; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+.sc-toggle { border: 0; border-radius: 999px; background: var(--accent); color: var(--accent-ink, #fff); font: 600 0.95rem var(--font-body, inherit); padding: 12px 18px; box-shadow: 0 8px 24px rgba(15,23,42,.25); cursor: pointer; display: inline-flex; gap: 8px; align-items: center; }
+.sc-badge { background: #dc2626; color: #fff; border-radius: 999px; font-size: .75rem; min-width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; padding: 0 6px; }
+.sc-panel { width: min(380px, calc(100vw - 32px)); height: min(520px, calc(100vh - 110px)); background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; box-shadow: 0 16px 48px rgba(15,23,42,.25); display: flex; flex-direction: column; overflow: hidden; }
+.sc-panel[hidden] { display: none; }
+.sc-panel header { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--rule); }
+.sc-panel header strong { display: block; }
+.sc-panel header .small { color: var(--muted); }
+.sc-close { border: 0; background: none; font-size: 1.5rem; line-height: 1; cursor: pointer; color: var(--muted); }
+.sc-log { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.sc-hello, .sc-note { font-size: .85rem; color: var(--muted); margin: 0; }
+.sc-err { color: var(--bad); }
+.sc-msg { max-width: 85%; }
+.sc-msg p { margin: 0; padding: 8px 12px; border-radius: 12px; white-space: pre-wrap; word-break: break-word; font-size: .92rem; }
+.sc-me { align-self: flex-end; text-align: right; }
+.sc-me p { background: var(--accent); color: var(--accent-ink, #fff); border-bottom-right-radius: 4px; text-align: left; }
+.sc-them p { background: var(--bg, #f1f5f9); border: 1px solid var(--rule); border-bottom-left-radius: 4px; }
+.sc-meta { display: block; font-size: .72rem; color: var(--muted); margin-top: 3px; }
+.sc-form { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--rule); align-items: flex-end; }
+.sc-form textarea { flex: 1; resize: none; margin: 0; min-height: 44px; }
+@media print { .sc { display: none; } }
+
+.help-toc { margin: -6px 0 18px; line-height: 2; }
+.help-card { scroll-margin-top: 80px; }

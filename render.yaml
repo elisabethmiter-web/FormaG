@@ -25,8 +25,8 @@ services:
         value: "1"
       - key: BASE_URL
         sync: false
-      - key: SUPPORT_EMAIL         # who companies contact when their free trial ends
-        sync: false
+      - key: SUPPORT_EMAIL         # who companies contact (Help page, sign-in page, demo ending)
+        value: liz@helmmsp.ca
       - key: TRIAL_DAYS
         value: "14"
       - key: DEMO_GRACE_DAYS
@@ -46,4 +46,8 @@ services:
       - key: BACKUP_S3_KEY_ID
         sync: false
       - key: BACKUP_S3_SECRET
+        sync: false
+      - key: NTFY_TOPIC             # support chat alerts to your phone (ntfy app); use a long random name
+        sync: false
+      - key: CONSOLE_URL            # your Admin Console address, e.g. https://formsign-admin.onrender.com
         sync: false

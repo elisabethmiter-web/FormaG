@@ -12,4 +12,15 @@
   <label for="confirm">Repeat new password<input id="confirm" type="password" name="confirm" autocomplete="new-password" minlength="8" required></label>
   <div><button class="btn btn-primary">Save password</button></div>
 </form>
+{% if not current_user.must_change_password %}
+<form method="post" action="{{ url_for('set_email_app') }}" class="panel" id="email-app" style="max-width:460px">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ url_for('account') }}#email-app">
+  <h2>Open emails in</h2>
+  <p class="muted small">Where <strong>✉ Open in my email</strong> writes the message to your client. FormSign doesn't send email itself: you check the message and press Send.</p>
+  {% for k, v in EMAIL_APPS.items() %}
+  <label class="check" style="display:flex;gap:8px;align-items:flex-start;font-weight:400"><input type="radio" name="email_app" value="{{ k }}" {{ 'checked' if email_app() == k }}> <span>{{ v[1] }}</span></label>
+  {% endfor %}
+  <div><button class="btn btn-primary">Save</button></div>
+</form>
+{% endif %}
 {% endblock %}

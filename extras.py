@@ -19,7 +19,7 @@ from flask import abort, flash, g, redirect, render_template, request, send_file
 
 TRIAL_DAYS = int(os.environ.get("TRIAL_DAYS", "14"))
 GRACE_DAYS = max(0, int(os.environ.get("DEMO_GRACE_DAYS", "3")))   # after the demo ends, before the account locks
-SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL") or os.environ.get("ADMIN_EMAIL", "")
+SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL") or os.environ.get("ADMIN_EMAIL") or "liz@helmmsp.ca"
 CHECK_SECONDS = max(30, int(os.environ.get("REMINDER_CHECK_SECONDS", "300")))
 HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 

@@ -24,7 +24,10 @@
   <form method="post" action="{{ url_for('packet_access_code', pid=p.id) }}" style="margin-left:auto"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="new"><button class="btn btn-quiet small">New code</button></form></div>
 {% endif %}
 {% if state not in ('completed','voided') %}
-<section class="panel">
+{% if request.args.get('compose') %}
+<div class="flash flash-ok" role="status" id="compose-banner"><strong>Packet ready.</strong> Click <strong>✉ Open in Email</strong> below: a new email to {{ p.client_name }} opens and the message, with a clickable link to the forms, is copied for you to paste in.{% if p.access_code %} Give the access code separately.{% endif %}</div>
+{% endif %}
+<section class="panel" id="send-panel">
   <div class="panel-head"><h2>Signing link</h2><span class="muted small">Valid until {{ p.expires_at|day }}</span></div>
   <p class="muted small">Send it from your own email or phone with the buttons below, or copy it. Anyone with the link can open it, so send it only to your client{{ '' if p.access_code else ' (or turn on an access code)' }}.</p>
   {% set qs = quick_message(p, None, p.sent_at and events|selectattr('type','equalto','sent')|list|length > 1) %}{% set kind = 'send' %}{% set who = '' %}{% set primary = true %}

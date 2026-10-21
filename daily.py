@@ -39,6 +39,7 @@ from datetime import datetime, timedelta, timezone
 
 from flask import (Response, abort, flash, g, jsonify, redirect, render_template, request, send_file, session,
                    url_for)
+from markupsafe import escape
 from werkzeug.utils import secure_filename
 
 try:
@@ -62,12 +63,34 @@ TIMEZONES = [
 ]
 COLUMNS = {
     "packets": {"access_code": "TEXT DEFAULT ''", "last_nudge_at": "TEXT"},
-    "users": {"last_seen_at": "TEXT"},
+    "users": {"last_seen_at": "TEXT", "email_app": "TEXT DEFAULT ''"},
     "companies": {"timezone": "TEXT DEFAULT ''"},
 }
 
 
+# Where "Open in my email" writes the message: the computer's email app, or webmail in a new tab.
+EMAIL_APPS = {
+    "app": ("my email", "The email app on this computer or phone (Outlook, Apple Mail, Thunderbird…)"),
+    "outlook": ("Outlook", "Outlook on the web: work or school (Microsoft 365)"),
+    "gmail": ("Gmail", "Gmail, or Google Workspace"),
+    "outlookcom": ("Outlook.com", "Outlook.com, Hotmail or Live (personal)"),
+}
+
+
+def compose_url(kind, to, subject, body):
+    """A link that opens a new email with everything filled in."""
+    q = urllib.parse.quote
+    if kind == "gmail":
+        return f"https://mail.google.com/mail/?view=cm&fs=1&to={q(to)}&su={q(subject)}&body={q(body)}"
+    if kind == "outlook":
+        return f"https://outlook.office.com/mail/deeplink/compose?to={q(to)}&subject={q(subject)}&body={q(body)}"
+    if kind == "outlookcom":
+        return f"https://outlook.live.com/mail/0/deeplink/compose?to={q(to)}&subject={q(subject)}&body={q(body)}"
+    return f"mailto:{q(to)}?subject={q(subject)}&body={q(body)}"
+
+
 def init_db(conn):
+    conn.execute("CREATE TABLE IF NOT EXISTS text_links (id TEXT PRIMARY KEY, body TEXT NOT NULL, created_at TEXT NOT NULL)")
     for table, cols in COLUMNS.items():
         have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
         for col, spec in cols.items():
@@ -191,7 +214,8 @@ def register(A):
         return (name or "").split(" ")[0] or name
 
     def quick_message(p, signer=None, reminder=False):
-        """Subject, email body and short text for a packet (or for the second owner when `signer` is given)."""
+        """The message for a packet (or for the second owner when `signer` is given): plain text, an HTML version
+        with a clickable named link (pasted into the email), a short text message, and links that open them."""
         name = signer["name"] if signer else p["client_name"]
         email = (signer["email"] if signer else p["client_email"]) or ""
         link = (A.BASE_URL or request.url_root.rstrip("/")) + (f"/c/{signer['token']}" if signer else f"/s/{p['token']}")
@@ -200,7 +224,7 @@ def register(A):
             [r[0] for r in db().execute("SELECT template_name FROM packet_items WHERE packet_id=? ORDER BY position", (p["id"],))]
         business = A.biz()
         dl = A.deadline_info(p) if not reminder else {"due_at": None}
-        due = f"\nPlease complete by {A.fmt_when(dl['due_at'])}.\n" if dl.get("due_at") else "\n"
+        due_text = f"Please complete by {A.fmt_when(dl['due_at'])}." if dl.get("due_at") else ""
         sender = g.user["name"] if g.get("user") and g.user["id"] else business
         if reminder:
             subject = f"Reminder: your forms from {business} are waiting for your signature"
@@ -210,18 +234,104 @@ def register(A):
             intro = f"{business} has sent you the following to review and sign:"
         if signer:
             intro += f" (you sign as the second owner, after {first_name(p['client_name'])})"
-        code = "\nYou'll be asked for an access code: we'll give it to you separately.\n" if p["access_code"] else ""
+        code_text = "You'll be asked for an access code: we'll give it to you separately." if p["access_code"] else ""
+        # the clickable text shown instead of the web address
+        if len(forms) <= 2:
+            link_text = f"{business} – " + " & ".join(forms) if forms else f"{business} – your forms"
+        else:
+            link_text = f"{business} – {forms[0]}, {forms[1]} and {len(forms) - 2} more"
         body = (f"Hi {first_name(name)},\n\n{intro}\n" + "".join(f"  - {f}\n" for f in forms) +
-                f"\nOpen your forms here:\n{link}\n{due}{code}\nThank you,\n{sender}\n{business}\n")
+                f"\nOpen your forms here:\n{link}\n" + (f"\n{due_text}\n" if due_text else "") +
+                (f"\n{code_text}\n" if code_text else "") + f"\nThank you,\n{sender}\n{business}\n")
+        e = escape
+        html = (
+            f'<div style="font-family:Segoe UI,Arial,sans-serif;font-size:15px;line-height:1.5;color:#1f2937">'
+            f"<p>Hi {e(first_name(name))},</p><p>{e(intro)}</p>"
+            f'<ul style="margin:0 0 14px 0">' + "".join(f"<li>{e(f)}</li>" for f in forms) + "</ul>"
+            f'<p><a href="{e(link)}" style="display:inline-block;background:#1f3a8a;color:#ffffff;text-decoration:none;'
+            f'font-weight:600;padding:10px 18px;border-radius:6px">{e(link_text)}</a></p>'
+            + (f"<p>{e(due_text)}</p>" if due_text else "") + (f"<p>{e(code_text)}</p>" if code_text else "")
+            + f"<p>Thank you,<br>{e(sender)}<br>{e(business)}</p></div>")
         short = (f"{business}: Hi {first_name(name)}, "
                  + ("a reminder that your forms are waiting for your signature: " if reminder else
                     "please review and sign your forms here: ") + link + (" (access code given separately)" if p["access_code"] else ""))
         q = urllib.parse.quote
-        return {"subject": subject, "body": body, "short": short, "email": email, "link": link,
-                "mailto": f"mailto:{q(email)}?subject={q(subject)}&body={q(body)}",
-                "sms": f"sms:?&body={q(short)}"}
+        choice = email_app()
+        return {"subject": subject, "body": body, "html": str(html), "link_text": link_text, "short": short,
+                "email": email, "link": link,
+                "mailto": compose_url("app", email, subject, body),
+                "compose": compose_url(choice, email, subject, body),       # message as plain text (no paste needed)
+                "compose_paste": compose_url(choice, email, subject, ""),   # empty message: the copied one is pasted in
+                "compose_web": choice != "app", "compose_label": "Email", "email_app": choice,
+                "others": [{"key": k, "label": v[0], "url": compose_url(k, email, subject, body),
+                            "paste": compose_url(k, email, subject, "")} for k, v in EMAIL_APPS.items() if k != choice],
+                "sms": f"sms:?&body={q(short)}",
+                "qr": url_for("text_qr", pid=p["id"], who=signer["id"] if signer else "", kind="reminder" if reminder else "send")}
 
     app.jinja_env.globals["quick_message"] = quick_message
+
+    def email_app():
+        """This person's choice of where emails open (default: the email app on their computer)."""
+        u = g.get("user")
+        if not u:
+            return "app"
+        v = session.get("email_app") if u["id"] == 0 else u.get("email_app")
+        return v if v in EMAIL_APPS else "app"
+
+    app.jinja_env.globals["email_app"] = email_app
+    app.jinja_env.globals["EMAIL_APPS"] = EMAIL_APPS
+
+    # ------------------------------------------------ texting from a computer: scan a code with your phone
+    TEXT_LINK_MINUTES = 30
+
+    @app.route("/packets/<int:pid>/text-qr.svg")
+    @A.login_required
+    def text_qr(pid):
+        """QR code that opens the text message on the staff member's phone (works for 30 minutes)."""
+        from reportlab.graphics import renderSVG
+        from reportlab.graphics.barcode.qr import QrCodeWidget
+        from reportlab.graphics.shapes import Drawing
+        p = db().execute("SELECT * FROM packets WHERE id=?", (pid,)).fetchone() or abort(404)
+        signer = None
+        if request.args.get("who", "").isdigit():
+            signer = db().execute("SELECT * FROM packet_signers WHERE id=? AND packet_id=?",
+                                  (int(request.args["who"]), pid)).fetchone() or abort(404)
+        short = quick_message(p, signer, request.args.get("kind") == "reminder")["short"]
+        db().execute("DELETE FROM text_links WHERE created_at < ?", (iso(utcnow() - timedelta(days=1)),))
+        tid = secrets.token_urlsafe(9)
+        db().execute("INSERT INTO text_links (id, body, created_at) VALUES (?,?,?)", (tid, short, A.now()))
+        db().commit()
+        url = (A.BASE_URL or request.url_root.rstrip("/")) + url_for("text_on_phone", tid=tid)
+        w = QrCodeWidget(url, barLevel="M", barBorder=4)
+        x0, y0, x1, y1 = w.getBounds()
+        size = 240
+        dr = Drawing(size, size, transform=[size / (x1 - x0), 0, 0, size / (y1 - y0), 0, 0])
+        dr.add(w)
+        return Response(renderSVG.drawToString(dr), mimetype="image/svg+xml", headers={"Cache-Control": "no-store"})
+
+    @app.route("/t/<tid>")
+    def text_on_phone(tid):
+        """Opened on the staff member's phone from the QR code: one tap opens Messages with the text ready."""
+        r = db().execute("SELECT * FROM text_links WHERE id=?", (tid,)).fetchone()
+        if not r or (parse(r["created_at"]) or utcnow()) < utcnow() - timedelta(minutes=TEXT_LINK_MINUTES):
+            return render_template("text_phone.html", text=None), 410
+        return render_template("text_phone.html", text=r["body"], sms=f"sms:?&body={urllib.parse.quote(r['body'])}")
+
+    @app.route("/account/email-app", methods=["POST"])
+    @A.login_required
+    def set_email_app():
+        """Saved from the Account page, or when someone picks another email from the ▾ menu."""
+        v = request.form.get("email_app", "")
+        if v in EMAIL_APPS:
+            if g.user["id"] == 0:
+                session["email_app"] = v
+            else:
+                db().execute("UPDATE users SET email_app=? WHERE id=?", (v, g.user["id"]))
+                db().commit()
+        if request.form.get("quiet"):
+            return ("", 204)
+        flash(f"Emails will open in {EMAIL_APPS[v][1] if v in EMAIL_APPS else 'your email app'}.", "ok")
+        return redirect(request.form.get("next") or url_for("account"))
 
     @app.route("/packets/<int:pid>/nudge", methods=["POST"])
     @A.login_required

@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex"><title>Text your client</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"></head>
+<body><main class="wrap narrow" style="padding:24px 16px">
+{% if text %}
+  <h1 style="font-size:1.5rem">Text your client</h1>
+  <p class="muted">Tap the button: your Messages app opens with this text. Choose your client and press Send.</p>
+  <div class="panel" style="white-space:pre-wrap;word-break:break-word">{{ text }}</div>
+  <p><a class="btn btn-primary btn-lg" style="width:100%;justify-content:center" href="{{ sms }}">💬 Open in Messages</a></p>
+  <p><button class="btn" style="width:100%;justify-content:center" type="button" data-text="{{ text }}" onclick="var b=this;navigator.clipboard.writeText(b.dataset.text).then(function(){b.textContent='Copied ✓'})">Copy text</button></p>
+{% else %}
+  <h1 style="font-size:1.5rem">This code has expired</h1>
+  <p class="muted">Codes work for 30 minutes. On the computer, click <strong>Text from my phone</strong> again for a new one.</p>
+{% endif %}
+</main></body></html>

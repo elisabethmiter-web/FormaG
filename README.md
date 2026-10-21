@@ -112,6 +112,8 @@ The client reads every document right above where they sign:
 
 ## Everyday tools
 
+- **Create and open in Email**: on New packet, this button makes the packet and takes you to it. Click **✉ Open in Email**: a new email to the client opens (To and Subject filled in) and the message is copied. Click in the message area and press Ctrl+V (⌘V on Mac): the message appears with a button-style link named after your company and the forms (for example "Northbay Stone Works – Deposit Terms") instead of a long web address. FormSign itself sends nothing. Each person picks where emails open on their **Account** page (or from the ▾ next to the button): the email app on the computer (Outlook, Apple Mail), Outlook on the web (Microsoft 365), Gmail, or Outlook.com. **Copy message** copies the same message with the link.
+- **Text from my phone**: on a phone it opens Messages with the text ready. On a computer it shows a code to scan with your phone's camera; your phone then opens a page with **Open in Messages** (the code works for 30 minutes). Text messages can't hide the web address, so the link shows in full there.
 - **Send in one click**: on a packet, **Email it** or **Text it** opens your own email or phone with the message, link and your name filled in, so nothing is typed by hand. **Copy message** copies it instead. Each send or reminder is logged on the packet.
 - **What's new**: the dashboard shows "New since your last visit" (opened, signed, files added) and the Packets menu shows a count. Click **Turn on alerts** and the browser pops up a notice while FormSign is open in a tab.
 - **Follow-up list**: the **Follow-up** page lists every open packet that needs a nudge today (overdue, not opened in 2 days, opened but not finished, waiting on the second owner), each with a ready-made reminder. Once you've reminded someone, they move down to "Already reminded today". The menu shows how many are left.
@@ -119,12 +121,13 @@ The client reads every document right above where they sign:
 - **Download everything**: one ZIP with all signed PDFs, the files from the client and the audit trail, from the packet page or the client's done page. Clients are told to keep their link.
 - **Nightly backups**: every night (1–5 am) the app saves a copy of the database and all files, keeps the last 7 (`BACKUP_KEEP`) and, if you set the `BACKUP_S3_…` settings, copies each one to Backblaze B2 or Amazon S3. The Admin Console shows the last backup, has **Back up now**, lets you download any backup, and has **Restore** (pick a backup on the server or upload one; today's data is saved first so a restore can be undone).
 - **Server restarts don't lose a signature**: if the server is restarting when a client presses Finish, the page waits and sends it again by itself as soon as the server is back. `/healthz` tells Render the app is up.
-- **Access code (optional)**: tick **Ask for an access code** on New packet. The client needs a 6-digit code to open their link; give it to them by phone or text, separately from the link. After 5 wrong tries the link waits 15 minutes. You can change or remove the code on the packet page. Signing on your own device skips the code.
+- **Access code (optional)**: tick **Require an access code** on New packet. The client needs a 4-digit code to open their link; give it to them by phone or text, separately from the link. After 5 wrong tries the link waits 15 minutes. You can change or remove the code on the packet page. Signing on your own device skips the code.
 - **Earlier clients**: typing a client's name on New packet suggests clients you've sent to before and fills in their email.
 - **Faster previews**: Word, Excel and photo previews are prepared in the background as soon as a packet is made, so the client's page opens quickly.
 - **Time zone per company**: managers pick their time zone on the Company page; every time in the app is shown in it.
 - **Check a signed PDF**: anyone can upload a signed PDF at `/verify` to see whether it matches the one signed here, with no certificate to buy. The signing record page explains the "identity unknown" message Adobe shows for the app's own seal, gives the verify address, and `/verify/certificate.cer` lets an office trust the seal in Acrobat if they want.
 - **Demo grace days**: when a demo ends, the company gets a red banner and keeps working for 3 more days (`DEMO_GRACE_DAYS`) before it locks, so nobody loses a client mid-signing.
+- **Support chat**: every page has a **💬 Support** button (company staff and managers). Messages go to the platform owner's **Support** inbox in the Admin Console, and the owner's phone gets a push alert (free, through the ntfy app: set `NTFY_TOPIC`). Answers appear in the same chat, and the button shows a red number when there's one. The Help page says to contact `SUPPORT_EMAIL` (liz@helmmsp.ca by default) or use the chat.
 - **Help when stuck**: the sign-in page shows who to call (`SUPPORT_NAME`, `SUPPORT_PHONE`, `SUPPORT_EMAIL`), and the **Help** page has step-by-step answers for the common jobs, plus your video link (`HELP_VIDEO_URL`).
 
 ## Run it on your computer (5 minutes)
@@ -165,7 +168,7 @@ Any host that runs Docker works too (Railway, Fly.io, a VPS): build the `Dockerf
 | `SEAL` | no | `0` turns off PDF sealing |
 | `TRIAL_DAYS` | no | Length of the demo (default 14) |
 | `INVOICE_DEFAULT_AMOUNT` / `INVOICE_CURRENCY` | no | Suggested amount and currency for new invoices in the Admin Console (default 185.00 CAD) |
-| `SUPPORT_EMAIL` | recommended | Shown to companies when their demo ends, as who to contact (for example liz@helmmsp.ca) |
+| `SUPPORT_EMAIL` | no | Who companies contact (Help page, sign-in page, demo ending). Default liz@helmmsp.ca |
 | `DEMO_GRACE_DAYS` | no | Days a company keeps working after its demo ends, with a warning, before it locks (default 3) |
 | `SUPPORT_NAME` / `SUPPORT_PHONE` | recommended | Who to call, shown on the sign-in and Help pages (for example Helm MSP, 1-555-...) |
 | `HELP_VIDEO_URL` | no | Link to a how-to video, shown on the Help page |
@@ -174,6 +177,10 @@ Any host that runs Docker works too (Railway, Fly.io, a VPS): build the `Dockerf
 | `BACKUP_S3_ENDPOINT` | no | Off-site backups: the S3 address, e.g. `https://s3.us-west-004.backblazeb2.com` (Backblaze B2) or `https://s3.ca-central-1.amazonaws.com` |
 | `BACKUP_S3_BUCKET` / `BACKUP_S3_REGION` | no | Bucket name and region (e.g. `us-west-004`, `ca-central-1`) |
 | `BACKUP_S3_KEY_ID` / `BACKUP_S3_SECRET` | no | The application key ID and secret for that bucket (write access is enough) |
+| `NTFY_TOPIC` | recommended | Support chat alerts: a long, hard-to-guess topic name (for example `helm-formsign-7f3k29xq`). Subscribe to the same topic in the ntfy app on your phone |
+| `CONSOLE_URL` | recommended | Your Admin Console's address; tapping a phone alert opens the Support inbox |
+| `SUPPORT_HOURS` | no | Shown in the chat (default "Monday to Friday, 9 am to 5 pm Eastern") |
+| `NTFY_URL` / `NTFY_TOKEN` | no | Only if you run your own ntfy server or a protected topic (default https://ntfy.sh) |
 | `STORAGE_CHECK` | no | `0` hides the storage warning; `1` checks even off Render |
 | `BUSINESS_NAME` | no | Only used when upgrading: names the first company |
 | `BASE_URL` | recommended | Public address, used in signing links |
