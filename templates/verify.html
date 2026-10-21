@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>{% include "_head.html" %}<title>Verify a signed document · {{ platform_name }}</title></head>
+<body>
+<main class="wrap narrow" style="padding-top:40px">
+  <span class="brand">{% include "_mark.html" %}{{ platform_name }}</span>
+  <div class="page-head" style="margin-top:16px"><div><span class="eyebrow">Free check</span><h1>Verify a signed document</h1>
+  <p class="muted">Upload a signed PDF from {{ platform_name }} to check it's an authentic copy that hasn't been changed since it was signed. The file is checked and then discarded; it isn't stored.</p></div></div>
+  {% if result %}
+    {% if result.ok %}
+    <section class="panel" style="border-color:var(--ok)">
+      <h2 style="color:var(--ok)">✓ Authentic and unchanged</h2>
+      <p>This is the signed copy of <strong>{{ result.document }}</strong> from <strong>{{ result.business }}</strong>, signed by {{ result.signers|join(' and ') }} on {{ result.signed_at|when }}.</p>
+      <p class="muted small">Confirmation {{ result.ref }} · SHA-256 {{ result.digest }}</p>
+    </section>
+    {% else %}
+    <section class="panel" style="border-color:var(--bad)">
+      <h2 style="color:var(--bad)">No match</h2>
+      <p>{{ result.message }}</p>
+      {% if result.digest %}<p class="muted small">SHA-256 of your file: {{ result.digest }}</p>{% endif %}
+      <p class="muted small">Ask the business for the copy from their system if you need to compare.</p>
+    </section>
+    {% endif %}
+  {% endif %}
+  <form method="post" enctype="multipart/form-data" class="panel stack" style="gap:10px">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <label for="file">Signed PDF<input id="file" type="file" name="file" accept="application/pdf" required></label>
+    <div><button class="btn btn-primary">Check the document</button></div>
+  </form>
+  <section class="panel stack" style="gap:8px">
+    <h2>About the digital seal</h2>
+    <p class="small" style="margin:0">Every signed PDF is digitally sealed. In Adobe Acrobat Reader, the Signatures panel shows whether the document was changed after it was signed.</p>
+    <p class="small" style="margin:0">Adobe may say the signer's identity is <em>unknown</em> or <em>not verified</em>. That only means the seal uses {{ platform_name }}'s own certificate rather than one bought from a certificate company; it doesn't affect the signatures. To make Adobe show the seal as trusted on your computer, download the certificate below, then in Adobe Reader open <em>Preferences → Signatures → Identities &amp; Trusted Certificates → Trusted Certificates → Import</em>, choose the file and tick <em>Use this certificate as a trusted root</em>.</p>
+    <p class="small muted" style="margin:0">Certificate: {{ cert.subject }} · valid until {{ cert.expires }}<br>SHA-256 fingerprint: <span class="mono" style="word-break:break-all">{{ cert.fingerprint }}</span></p>
+    <div><a class="btn" href="{{ url_for('verify_certificate') }}">Download the seal certificate</a></div>
+  </section>
+</main>
+</body>
+</html>

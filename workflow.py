@@ -23,7 +23,6 @@ from flask import abort, flash, g, redirect, render_template, request, send_file
 from werkzeug.security import check_password_hash
 from werkzeug.utils import secure_filename
 
-import sms
 
 UPLOAD_MAX_BYTES = 25 * 1024 * 1024
 UPLOAD_MAX_FILES = 30
@@ -190,50 +189,11 @@ def register(A):
         items = [i["id"] for i in sign_items(pid)]
         pending = [s for s in cosigners(pid) if not set(items) <= cosigned_ids(s["id"])]
         if pending:
-            for s in pending:   # the first owner has finished: tell the second owner it's their turn (once)
-                if s["turn_notified_at"]:
-                    continue
-                n = db().execute("UPDATE packet_signers SET turn_notified_at=? WHERE id=? AND turn_notified_at IS NULL",
-                                 (A.now(), s["id"])).rowcount
-                db().commit()
-                if n and session.get("kiosk", {}).get("pid") != pid:
-                    notify_cosigner(p, s, turn=True)
             return False
         A.complete_packet(pid)
         return True
 
     A.maybe_complete = maybe_complete
-
-    # ------------------------------------------------ sending to the second owner
-    def notify_cosigner(p, s, via=("text",), turn=False, quiet=True):
-        """Text the second owner their own link (when texting is set up). Returns the channels used."""
-        company = A.get_company(p["company_id"])
-        link = cosign_url(s["token"])
-        used = []
-        if "text" in via and sms.enabled() and s["phone"]:
-            try:
-                body = (f"{company['name']}: Hi {first_name(s['name'])}, "
-                        + ("it's your turn to sign: " if turn else "please review and sign as the second owner: ") + link)
-                sms.send(s["phone"], body)
-                used.append("text")
-            except RuntimeError as exc:
-                A.log_event(p["id"], "text_failed", f"to {s['name']}: {str(exc)[:160]}")
-                if not quiet:
-                    flash(f"The text to {s['name']} didn't go out ({exc}).", "error")
-        if used:
-            db().execute("UPDATE packet_signers SET sent_at=COALESCE(sent_at, ?), last_reminder_at=? WHERE id=?",
-                         (A.now(), A.now(), s["id"]))
-            A.log_event(p["id"], "sent", f"{'turn notice' if turn else 'link'} to {s['name']} (second owner) by text")
-        db().commit()
-        return used
-
-    def notify_cosigners(pid, via):
-        p = db().execute("SELECT * FROM packets WHERE id=?", (pid,)).fetchone()
-        for s in cosigners(pid):
-            if not s["completed_at"]:
-                notify_cosigner(p, s, via=(via,))
-
-    A.notify_cosigners = notify_cosigners
 
     # ------------------------------------------------ new packet: checks and extras
     def validate_packet_extras(form):
@@ -241,13 +201,10 @@ def register(A):
         if form.get("signers") == "2":
             name = form.get("cosigner_name", "").strip()
             email = form.get("cosigner_email", "").strip()
-            phone = form.get("cosigner_phone", "").strip()
             if not name:
                 return "Add the second owner's name, or choose “One client signs”."
             if email and "@" not in email:
                 return "The second owner's email doesn't look right."
-            if phone and not sms.normalize(phone):
-                return "The second owner's mobile number doesn't look right. Use 10 digits, like 613-555-0123."
             if email and email.lower() == form.get("client_email", "").strip().lower():
                 return "Each owner needs their own email address, so each gets their own signing link."
         if form.get("ask_files") == "on" and not form.get("upload_request", "").strip():
@@ -263,10 +220,9 @@ def register(A):
         db().execute("UPDATE packet_items SET placements_json=(SELECT COALESCE(t.placements_json,'[]') FROM templates t "
                      "WHERE t.id=packet_items.template_id) WHERE packet_id=? AND template_id IS NOT NULL", (pid,))
         if form.get("signers") == "2" and form.get("cosigner_name", "").strip():
-            phone = form.get("cosigner_phone", "").strip()
             db().execute("INSERT INTO packet_signers (packet_id, name, email, phone, token, created_at) VALUES (?,?,?,?,?,?)",
                          (pid, form.get("cosigner_name", "").strip()[:120], form.get("cosigner_email", "").strip()[:120],
-                          sms.normalize(phone) or "" if phone else "", secrets.token_urlsafe(24), A.now()))
+                          "", secrets.token_urlsafe(24), A.now()))
             A.log_event(pid, "details", f"two owners sign: second owner {form.get('cosigner_name', '').strip()[:120]}")
         if form.get("ask_files") == "on":
             db().execute("UPDATE packets SET upload_request=? WHERE id=?", (form.get("upload_request", "").strip()[:500], pid))
@@ -446,31 +402,15 @@ def register(A):
         return render_template("cosign_done.html", p=p, s=s, items=items, done=cosigned_ids(s["id"]))
 
     # ------------------------------------------------ staff: second owner, files, versions
-    @app.route("/packets/<int:pid>/cosigner/<int:sid>/send", methods=["POST"])
-    @A.login_required
-    def cosigner_send(pid, sid):
-        p = db().execute("SELECT * FROM packets WHERE id=?", (pid,)).fetchone()
-        s = db().execute("SELECT * FROM packet_signers WHERE id=? AND packet_id=?", (sid, pid)).fetchone() or abort(404)
-        used = notify_cosigner(p, dict(s), via=("text",), quiet=False)
-        if used:
-            flash(f"Texted {s['name']} their signing link.", "ok")
-        elif not (sms.enabled() and s["phone"]):
-            flash(f"Add a mobile number for {s['name']} (or turn on texting) first.", "error")
-        return redirect(url_for("packet_detail", pid=pid) + "#owners")
-
     @app.route("/packets/<int:pid>/cosigner/<int:sid>/edit", methods=["POST"])
     @A.login_required
     def cosigner_edit(pid, sid):
         s = db().execute("SELECT * FROM packet_signers WHERE id=? AND packet_id=?", (sid, pid)).fetchone() or abort(404)
         email = request.form.get("email", "").strip()[:120]
-        phone_raw = request.form.get("phone", "").strip()
-        phone = sms.normalize(phone_raw) if phone_raw else ""
         if email and "@" not in email:
             flash("That email doesn't look right.", "error")
-        elif phone_raw and not phone:
-            flash("That mobile number doesn't look right. Use 10 digits, like 613-555-0123.", "error")
         else:
-            db().execute("UPDATE packet_signers SET email=?, phone=? WHERE id=?", (email, phone, sid))
+            db().execute("UPDATE packet_signers SET email=? WHERE id=?", (email, sid))
             A.log_event(pid, "details", f"{s['name']}'s contact details updated by {A.actor()}")
             db().commit()
             flash("Saved.", "ok")
@@ -762,7 +702,7 @@ def register(A):
         wb = Workbook()
         ws = wb.active
         ws.title = "Packets"
-        head = ["Confirmation", "Client", "Client email", "Client mobile", "Second owner", "SO#", "Sales rep",
+        head = ["Confirmation", "Client", "Client email", "Second owner", "SO#", "Sales rep",
                 "Created by", "Created", "Sent", "Opened", "Completed", "Status", "Signed", "Forms",
                 "Files from client", "Overdue"]
         ws.append(head)
@@ -779,7 +719,7 @@ def register(A):
             cs = cosigners(p["id"])
             st = A.effective_status(p)
             dl = A.deadline_info(p) if st in ("sent", "viewed", "in_progress") else {"overdue": False}
-            ws.append([A.packet_ref(p), p["client_name"], p["client_email"], sms.pretty(p["client_phone"]) if p["client_phone"] else "",
+            ws.append([A.packet_ref(p), p["client_name"], p["client_email"],
                        ", ".join(s["name"] for s in cs), p["so_number"] or "", p["sales_rep"] or "", p["created_by"] or "",
                        local(p["created_at"]), local(p["sent_at"]), local(p["first_viewed_at"]), local(p["completed_at"]),
                        labels.get(st, st), f"{signed} of {total}",
@@ -791,10 +731,10 @@ def register(A):
         for c in ws[1]:
             c.font, c.fill = bold, fill
             c.alignment = Alignment(vertical="center")
-        widths = [20, 24, 28, 16, 22, 12, 18, 18, 17, 17, 17, 17, 13, 9, 50, 10, 9]
+        widths = [20, 24, 28, 22, 12, 18, 18, 17, 17, 17, 17, 13, 9, 50, 10, 9]
         for i, w in enumerate(widths, 1):
             ws.column_dimensions[get_column_letter(i)].width = w
-        for col in "IJKL":
+        for col in "HIJK":
             for c in ws[col][1:]:
                 c.number_format = "yyyy-mm-dd hh:mm"
         ws.freeze_panes = "B2"
@@ -805,52 +745,6 @@ def register(A):
         stamp = datetime.now(A.LOCAL_TZ).strftime("%Y-%m-%d")
         return send_file(buf, as_attachment=True, download_name=f"packets-{stamp}.xlsx",
                          mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-
-    # ------------------------------------------------ reminders for second owners
-    def run_cosigner_reminders(conn):
-        """Text second owners who have forms waiting for them, on their company's schedule."""
-        if not sms.enabled():
-            return 0
-        nowdt = datetime.now(timezone.utc).replace(microsecond=0)
-        done = 0
-        rows = conn.execute(
-            "SELECT s.*, c.reminder_days, c.reminder_max, c.name AS company_name FROM packet_signers s "
-            "JOIN packets p ON p.id=s.packet_id JOIN companies c ON c.id=p.company_id WHERE c.status='active' "
-            "AND c.reminders_on=1 AND s.completed_at IS NULL AND p.completed_at IS NULL AND p.voided_at IS NULL "
-            "AND p.expires_at > ? AND s.sent_at IS NOT NULL AND COALESCE(s.phone,'') != '' "
-            "AND COALESCE(s.reminder_count,0) < c.reminder_max", (nowdt.isoformat(),)).fetchall()
-        for s in rows:
-            last_raw = s["last_reminder_at"] or s["sent_at"]
-            try:
-                last = datetime.fromisoformat(last_raw)
-            except (TypeError, ValueError):
-                continue
-            if nowdt - last < timedelta(days=max(1, s["reminder_days"] or 2)):
-                continue
-            ready = conn.execute("SELECT COUNT(*) FROM packet_items i WHERE i.packet_id=? AND i.requires_signature=1 AND "
-                                 "i.signed_at IS NOT NULL AND i.id NOT IN (SELECT item_id FROM cosignatures WHERE signer_id=?)",
-                                 (s["packet_id"], s["id"])).fetchone()[0]
-            if not ready:
-                continue  # still waiting for the first owner: nothing for them to do yet
-            n = conn.execute("UPDATE packet_signers SET reminder_count=COALESCE(reminder_count,0)+1, last_reminder_at=? "
-                             "WHERE id=? AND COALESCE(last_reminder_at, sent_at)=?", (A.now(), s["id"], last_raw)).rowcount
-            conn.commit()
-            if not n:
-                continue
-            base = A.BASE_URL or getattr(A, "BACKGROUND_BASE", "")
-            try:
-                sms.send(s["phone"], f"{s['company_name']}: Hi {first_name(s['name'])}, a reminder that your forms are "
-                                     f"waiting for your signature: {base}/c/{s['token']}")
-                conn.execute("INSERT INTO events (packet_id, type, detail, ip, at) VALUES (?,?,?,?,?)",
-                             (s["packet_id"], "reminder", f"automatic reminder to {s['name']} (second owner) by text", "",
-                              A.now()))
-                done += 1
-            except RuntimeError:
-                conn.execute("UPDATE packet_signers SET reminder_count=MAX(reminder_count-1,0) WHERE id=?", (s["id"],))
-            conn.commit()
-        return done
-
-    A.run_cosigner_reminders = run_cosigner_reminders
 
     def cosign_names(d):
         """Audit trail rows: both owners' names on each document."""

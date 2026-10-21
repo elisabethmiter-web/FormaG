@@ -13,7 +13,7 @@
     <label for="password">Password<input id="password" type="password" name="password" autocomplete="current-password"></label>
     <button class="btn btn-primary btn-lg">Sign in</button>
     {% if allow_signup %}<p class="small" style="margin:0">New company? <a href="{{ url_for('signup') }}">Create your company account</a></p>{% endif %}
-    <p class="muted small" style="margin:0">Forgot your password? Ask a manager at your company to reset it.</p>
+    <p class="muted small" style="margin:0">Forgot your password? Ask a manager at your company to reset it.{% if support_name or support_phone or support_email %} Managers: contact {{ support_name or 'support' }}{% if support_phone %} at {{ support_phone }}{% endif %}{% if support_email %}{{ ' or' if support_phone else ' at' }} <a href="mailto:{{ support_email }}">{{ support_email }}</a>{% endif %}.{% endif %}</p>
   </form>
 </main>
 </body>

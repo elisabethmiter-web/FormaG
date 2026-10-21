@@ -8,9 +8,8 @@
   <input type="hidden" name="csrf" value="{{ csrf_token() }}">
 
   <div class="grid-2">
-    <label for="client_name">Client name<input id="client_name" type="text" name="client_name" value="{{ form.get('client_name','') }}" required></label>
+    <label for="client_name">Client name<input id="client_name" type="text" name="client_name" value="{{ form.get('client_name','') }}" required list="client-list" autocomplete="off"><datalist id="client-list"></datalist></label>
     <label for="client_email">Client email <span class="hint">Optional, for your records</span><input id="client_email" type="email" name="client_email" value="{{ form.get('client_email','') }}"></label>
-    <label for="client_phone">Client mobile <span class="hint">Optional. For text messages{{ '' if sms_enabled else ' (when texting is set up)' }}</span><input id="client_phone" type="tel" name="client_phone" value="{{ form.get('client_phone','') }}" placeholder="613-555-0123" autocomplete="off"></label>
   </div>
   <fieldset class="stack signers-box" style="border:0;padding:0;margin:0;gap:8px">
     <legend style="font-weight:500;margin-bottom:8px">Who signs?</legend>
@@ -21,8 +20,7 @@
     <div class="grid-2" id="cosigner-fields" {{ '' if form.get('signers') == '2' else 'hidden' }}>
       <label for="cosigner_name">Second owner's name<input id="cosigner_name" type="text" name="cosigner_name" value="{{ form.get('cosigner_name','') }}" autocomplete="off"></label>
       <label for="cosigner_email">Second owner's email<input id="cosigner_email" type="email" name="cosigner_email" value="{{ form.get('cosigner_email','') }}" autocomplete="off"></label>
-      <label for="cosigner_phone">Second owner's mobile <span class="hint">Optional</span><input id="cosigner_phone" type="tel" name="cosigner_phone" value="{{ form.get('cosigner_phone','') }}" placeholder="613-555-0123" autocomplete="off"></label>
-      <p class="muted small" style="align-self:end;margin:0">Each owner gets their own link. The second owner signs each form after the first, and the packet completes when both have signed.</p>
+      <p class="muted small" style="align-self:end;margin:0">Each owner gets their own link, which you copy and send them. The second owner signs each form after the first, and the packet completes when both have signed.</p>
     </div>
   </fieldset>
   <fieldset class="stack" style="border:0;padding:0;margin:0;gap:8px">
@@ -48,6 +46,7 @@
     </label>
     <div id="adhoc-list" class="adhoc-list"></div>
   </div>
+  <label class="check"><input type="checkbox" name="access_code" {{ 'checked' if form.get('access_code') }}> <span><strong style="font-weight:500">Require an access code</strong><br><span class="muted small">The client enters a 4-digit code before seeing the documents. You'll give it to them by phone or in person.</span></span></label>
   <fieldset class="stack" style="border:0;padding:0;margin:0;gap:8px">
     <label class="check"><input type="checkbox" name="ask_files" id="ask_files" {{ 'checked' if form.get('ask_files') }}> <span><strong style="font-weight:500">Ask the client for photos or files</strong><br><span class="muted small">They can add them from their phone or computer while signing. Optional for the client.</span></span></label>
     <div class="stack" id="ask-files-fields" style="gap:8px" {{ '' if form.get('ask_files') else 'hidden' }}>
@@ -59,14 +58,27 @@
   <label for="expiry_days" style="max-width:260px">Link expires after
     <select id="expiry_days" name="expiry_days">{% for d in (7,14,30,60,90) %}<option value="{{ d }}" {{ 'selected' if d==30 }}>{{ d }} days</option>{% endfor %}</select></label>
   <div class="row">
-    {% if sms_enabled %}<label class="check" style="flex-basis:100%"><input type="checkbox" name="text_link" {{ 'checked' if form.get('text_link') }}> Also text the signing link to the client's mobile</label>{% endif %}
     <button class="btn btn-primary btn-lg" name="action" value="link">Create signing link</button>
     <button class="btn btn-lg" name="action" value="in_person" title="Your client signs on this device now">Sign now on this device</button>
-    <span class="muted small">Then copy the link{{ ' or text it' if sms_enabled }} to your client.</span>
+    <span class="muted small">Then copy the link into your own email or message to your client.</span>
   </div>
 </form>
 {% endblock %}
 {% block scripts %}
+<script>
+(function(){
+  const name=document.getElementById('client_name'), email=document.getElementById('client_email'), list=document.getElementById('client-list');
+  let found={}, timer=null;
+  name.addEventListener('input',()=>{
+    if(found[name.value] && !email.value){ email.value=found[name.value]; return; }
+    clearTimeout(timer); const q=name.value.trim(); if(q.length<2) return;
+    timer=setTimeout(async()=>{ try{ const r=await fetch('{{ url_for('clients_json') }}?q='+encodeURIComponent(q)); const rows=await r.json();
+      list.innerHTML=''; found={}; rows.forEach(c=>{ found[c.name]=c.email; const o=document.createElement('option'); o.value=c.name; o.label=c.email||''; list.appendChild(o); });
+    }catch(e){} },250);
+  });
+  name.addEventListener('change',()=>{ if(found[name.value] && !email.value) email.value=found[name.value]; });
+})();
+</script>
 <script>
 (function(){
   const box=document.getElementById('cosigner-fields');

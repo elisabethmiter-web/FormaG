@@ -13,6 +13,16 @@
     </form></details>
 </div>
 
+{% set ups = recent_updates() %}
+<section class="panel updates-panel">
+  <div class="panel-head"><h2>New since your last visit{% if ups %} <span class="nav-badge">{{ ups|length }}</span>{% endif %}</h2>
+    <div class="row" style="gap:8px"><button type="button" class="btn btn-quiet small" id="alerts-btn">Turn on desktop alerts</button>
+    {% if ups %}<form method="post" action="{{ url_for('updates_seen') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn small">Mark all as seen</button></form>{% endif %}</div></div>
+  {% if ups %}<ul class="small">{% for e in ups[:8] %}<li><a href="{{ url_for('packet_detail', pid=e.pid) }}">{{ update_text(e) }}</a> <span class="muted">· {{ e.at|when }}</span></li>{% endfor %}</ul>
+  {% if ups|length > 8 %}<p class="muted small" style="margin:4px 0 0">and {{ ups|length - 8 }} more</p>{% endif %}
+  {% else %}<p class="muted small" style="margin:4px 0 0">Nothing new. When a client opens, signs or sends files, it shows here.{% if followup_count %} <a href="{{ url_for('follow_up') }}">{{ followup_count }} packet{{ 's' if followup_count != 1 }} to follow up today →</a>{% endif %}</p>{% endif %}
+</section>
+
 <div class="stats">
   <div class="stat"><span class="eyebrow">Awaiting client</span><strong>{{ counts.awaiting }}</strong><span class="muted small">sent, not opened yet</span></div>
   <div class="stat"><span class="eyebrow">Opened, in progress</span><strong>{{ counts.viewed }}</strong><span class="muted small">client has the link open</span></div>
@@ -53,7 +63,7 @@
         {% if is_manager %}<td class="small">{{ p.created_by or 'Owner' }}</td>{% endif %}
         <td><span class="stamp s-{{ p.state }}">{{ {'draft':'Draft','sent':'Sent','viewed':'Opened','in_progress':'In progress','completed':'Signed','expired':'Expired','voided':'Cancelled'}[p.state] }}</span>
           {% if p.missing %}<div class="still-needed" title="{{ p.missing|join(', ') }}"><span>Still needed:</span><ul>{% for m in p.missing[:4] %}<li>{{ m }}</li>{% endfor %}{% if p.missing|length > 4 %}<li>+ {{ p.missing|length - 4 }} more</li>{% endif %}</ul></div>
-          {% elif p.total == 0 and p.state not in ('completed','voided') %}<div class="still-needed"><span>Receipt not confirmed yet</span></div>{% endif %}</td>
+          {% elif p.total == 0 and p.state not in ('completed','voided') %}<div class="still-needed"><span>Receipt not confirmed yet</span></div>{% endif %}{% if p.state not in ('completed','voided') %}{% for w in waiting_on(p.id) %}<div><span class="wait-chip">Waiting on {{ w.name }}</span></div>{% endfor %}{% endif %}</td>
         <td><div class="progress"><div class="bar {{ 'done' if p.signed==p.total }}"><span style="width:{{ (100*p.signed/p.total)|round|int if p.total else 0 }}%"></span></div>{{ p.signed }} of {{ p.total }}</div></td>
         <td class="small nowrap">{{ p.sent_at|day }}{% if p.deadline.label %}<div class="due {{ 'late' if p.deadline.overdue }}">{{ p.deadline.label }}</div>{% elif p.completed_at %}<div class="muted">Done {{ p.completed_at|day }}</div>{% endif %}</td>
         <td class="small fu-cell">{% if p.last_fu %}<strong>#{{ p.last_fu.n }}</strong> · {{ p.last_fu.at|day }}{% if p.last_fu.note %}<div class="muted fu-note" title="{{ p.last_fu.note }}">{{ p.last_fu.note|truncate(60) }}</div>{% endif %}{% elif p.deadline.overdue %}<span class="due late">None yet</span>{% else %}<span class="muted">—</span>{% endif %}</td>

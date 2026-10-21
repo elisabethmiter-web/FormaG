@@ -26,4 +26,5 @@
   {% include "_sign_panel.html" %}
 </form>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='sign.js') }}"></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='sign.js') }}"></script>
+<script src="{{ url_for('static', filename='keepalive.js') }}"></script>{% endblock %}

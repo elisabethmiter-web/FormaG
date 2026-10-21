@@ -1,0 +1,6 @@
+{# Buttons that open the staff member's own email or phone with the message ready. Needs: p, qs (quick_message), kind, who #}
+<div class="quick-send" data-nudge="{{ url_for('packet_nudge', pid=p.id) }}" data-kind="{{ kind }}" data-who="{{ who or '' }}">
+  <a class="btn {{ 'btn-primary' if primary }}" href="{{ qs.mailto }}" data-via="email" title="{{ 'Opens your email with the message ready' if qs.email else 'Opens your email; add the address' }}">✉ Open in my email</a>
+  <a class="btn" href="{{ qs.sms }}" data-via="phone" title="On a phone: opens your text messages with the message ready">💬 Text from my phone</a>
+  <button type="button" class="btn btn-quiet" data-via="copy" data-text="{{ qs.body }}">Copy message</button>
+</div>

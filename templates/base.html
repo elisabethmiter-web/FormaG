@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 {% include "_head.html" %}
+<meta name="csrf" content="{{ csrf_token() }}">
 <title>{% block title %}{% endblock %} · {{ business_name }}</title>
 </head>
 <body>
@@ -10,8 +11,10 @@
     <a class="brand" href="{{ url_for('dashboard') if in_company else url_for('platform') }}">{% include "_mark.html" %}{{ business_name }}</a>
     {% if in_company %}
     <nav class="nav">
-      <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint in ('dashboard','packet_detail') }}">Packets</a>
+      <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint in ('dashboard','packet_detail') }}">Packets{% if new_count %}<span class="nav-badge" title="New since your last visit">{{ new_count }}</span>{% endif %}</a>
+      <a href="{{ url_for('follow_up') }}" class="{{ 'active' if request.endpoint=='follow_up' }}">Follow-up{% if followup_count %}<span class="nav-badge" style="background:var(--warn)">{{ followup_count }}</span>{% endif %}</a>
       <a href="{{ url_for('library') }}" class="{{ 'active' if request.endpoint in ('library','new_form','edit_form') }}">Form library</a>
+      <a href="{{ url_for('help_page') }}" class="{{ 'active' if request.endpoint=='help_page' }}">Help</a>
       {% if is_manager %}<a href="{{ url_for('team') }}" class="{{ 'active' if request.endpoint=='team' }}">Team</a>
       <a href="{{ url_for('company_settings') }}" class="{{ 'active' if request.endpoint=='company_settings' }}">Company</a>{% endif %}
     </nav>
@@ -34,7 +37,11 @@
   <span><strong>Your data isn't being saved permanently.</strong> This server stores everything on temporary storage, so companies, packets and signed copies are erased whenever it restarts. {% if current_user.id == 0 %}On Render, add a persistent disk to this service (mount path <code>/var/data</code>) and set <code>DATA_DIR</code> to <code>/var/data</code>.{% else %}Contact {{ support_email or platform_name }} right away.{% endif %}</span>
 </div></div>
 {% endif %}
-{% if trial_days_left is not none and in_company and is_manager %}
+{% if grace_days_left and in_company %}
+<div class="alert-bar alert-bad" role="alert"><div class="topbar-inner">
+  <span><strong>Your demo has ended.</strong> The account locks in {{ grace_days_left }} day{{ 's' if grace_days_left != 1 }}{% if support_email %}: to keep using {{ platform_name }}, contact <a href="mailto:{{ support_email }}">{{ support_email }}</a>{% endif %}{% if support_phone %} or call {{ support_phone }}{% endif %}. Nothing is deleted.</span>
+</div></div>
+{% elif trial_days_left is not none and in_company and is_manager %}
 <div class="alert-bar {{ 'alert-warn' if trial_days_left <= 3 else 'alert-info' }}"><div class="topbar-inner">
   <span><strong>Demo: {{ trial_days_left }} day{{ 's' if trial_days_left != 1 }} left.</strong> The account locks on its own when the demo ends{% if support_email %}. To keep using {{ platform_name }}, contact <a href="mailto:{{ support_email }}">{{ support_email }}</a>{% endif %}. Nothing is deleted.</span>
 </div></div>
@@ -44,5 +51,6 @@
 {% block content %}{% endblock %}
 </main>
 {% block scripts %}{% endblock %}
+{% if in_company %}<script src="{{ url_for('static', filename='alerts.js') }}"></script>{% endif %}
 </body>
 </html>

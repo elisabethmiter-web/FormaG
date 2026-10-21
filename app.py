@@ -28,7 +28,7 @@ from werkzeug.utils import secure_filename
 import admin_api
 import extras
 import workflow
-import sms
+import daily
 import pdfgen
 import seal
 import preview
@@ -242,8 +242,9 @@ def _init_db_locked():
     conn.execute("UPDATE packets SET created_by_id = COALESCE((SELECT u.id FROM users u WHERE u.name = "
                  "packets.created_by COLLATE NOCASE ORDER BY u.id LIMIT 1), 0) WHERE created_by_id IS NULL")
     admin_api.init_db(conn)  # Admin Console links
-    extras.init_db(conn)  # trial, branding, reminders, texts, password resets
+    extras.init_db(conn)  # demo, branding, storage check
     workflow.init_db(conn)  # second owners, client files, bundles, signature boxes
+    daily.init_db(conn)  # access codes, last visit, time zones
     conn.commit()
     conn.close()
 
@@ -1034,12 +1035,13 @@ def upload_pdf():
         flash(str(exc), "error")
         return redirect(url_for("library"))
     fields = parse_fields_from_request()
-    db().execute(
+    new_tid = db().execute(
         "INSERT INTO templates (name, kind, description, file_path, file_sha256, fields_json, created_at, "
         "file_name, file_mime, company_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
         (name or os.path.splitext(up["name"])[0], up["kind"], request.form.get("description", "").strip(),
-         up["stored"], up["sha256"], json.dumps(fields), now(), up["name"], up["mime"], cid()))
+         up["stored"], up["sha256"], json.dumps(fields), now(), up["name"], up["mime"], cid())).lastrowid
     db().commit()
+    warm_template(new_tid)   # prepare the preview in the background
     flash("Added to your library.", "ok")
     return redirect(url_for("library"))
 
@@ -1129,12 +1131,6 @@ def new_packet():
     if request.method == "POST":
         name = request.form.get("client_name", "").strip()
         email = request.form.get("client_email", "").strip()
-        phone_raw = request.form.get("client_phone", "").strip()
-        phone = sms.normalize(phone_raw) if phone_raw else ""
-        if phone_raw and not phone:
-            flash("That mobile number doesn't look right. Use 10 digits, like 613-555-0123, or leave it empty.", "error")
-            return render_template("packet_new.html", templates=templates, form=request.form,
-                                   selected=[int(x) for x in request.form.getlist("template_ids") if x.isdigit()])
         ids = [int(x) for x in request.form.getlist("template_ids") if x.isdigit()]
         ids = [i for i in ids if i in {t["id"] for t in templates}]  # only this company's forms
         extra_problem = validate_packet_extras(request.form)
@@ -1162,9 +1158,9 @@ def new_packet():
         expires = (datetime.now(timezone.utc) + timedelta(days=days)).replace(microsecond=0).isoformat()
         cur = db().execute(
             "INSERT INTO packets (token, client_name, client_email, message, status, created_at, expires_at, "
-            "created_by, created_by_id, company_id, client_phone) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "created_by, created_by_id, company_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
             (token, name, email, request.form.get("message", "").strip(), "draft", now(), expires,
-             actor(), g.user["id"], cid(), phone))
+             actor(), g.user["id"], cid()))
         pid = cur.lastrowid
         by_id = {t["id"]: t for t in templates}
         for pos, tid in enumerate(ids):
@@ -1191,11 +1187,11 @@ def new_packet():
             parts.append(f"{len(uploads)} one-off file(s)")
         log_event(pid, "created", ", ".join(parts) + (f" · by {actor()}" if actor() else ""))
         after_packet_created(pid)   # second owner, file request, signature boxes
+        daily_packet_created(pid)   # access code
         db().commit()
+        warm_packet(pid)   # prepare previews in the background
         if in_person:
             return start_in_person(pid)
-        if phone and request.form.get("text_link") == "on" and sms.enabled():
-            text_packet(pid)
         mark_sent(pid, "link")
         flash("Packet ready. Copy the signing link below and send it to your client.", "ok")
         return redirect(url_for("packet_detail", pid=pid))
@@ -1384,6 +1380,7 @@ def render_item_pdf(p, it, answers, signers, method=""):
     meta = {"business": biz(), "packet_ref": packet_ref(p), "client_name": p["client_name"],
             "client_email": p["client_email"], "signer_name": first["name"], "signed_at": first["signed_at"],
             "ip": first.get("ip"), "user_agent": first.get("user_agent"), "method": method,
+            "verify_url": (BASE_URL or request.url_root.rstrip("/")) + "/verify",
             "form_name": it["template_name"], "original_sha256": it["template_sha256"],
             }
     if len(signers) > 1:
@@ -1590,6 +1587,7 @@ def security_headers(resp):
 admin_api.register(__import__("sys").modules[__name__])
 extras.register(__import__("sys").modules[__name__])
 workflow.register(__import__("sys").modules[__name__])
+daily.register(__import__("sys").modules[__name__])
 
 
 if __name__ == "__main__":

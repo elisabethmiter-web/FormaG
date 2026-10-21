@@ -8,7 +8,8 @@
   <span class="ref">Confirmation {{ packet_ref(p) }}</span>
 </section>
 <section class="panel">
-  <h2>Your signed copies</h2>
+  <div class="panel-head"><h2>Your signed copies</h2><a class="btn btn-primary" href="{{ url_for('cosign_copies_zip', token=s.token) }}">Download all</a></div>
+  <p class="muted small" style="margin:0 0 8px">Keep this link: your copies stay available here. Anyone can check a copy is genuine at <a href="{{ url_for('verify') }}">{{ url_for('verify', _external=True) }}</a>.</p>
   <div class="doc-list">
   {% for it in items %}{% if it.id in done %}
     <div class="doc-row"><div class="doc-main"><strong>{{ it.template_name }}</strong><span class="small muted">Signed by {{ it.signer_name }} and {{ s.name }}</span></div>

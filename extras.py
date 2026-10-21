@@ -1,9 +1,7 @@
 """Account and client-contact features:
 
 * storage check     warns the owner and managers when the server saves data to temporary storage
-* auto reminders    texts clients who haven't finished signing, on each company's schedule (needs Twilio)
 * branding          each company's logo and colour on the client signing pages
-* text messages     send the signing link and reminders by SMS through Twilio (see sms.py)
 * 14-day demo       companies that sign up themselves (and companies the owner starts as a demo) get TRIAL_DAYS
                     days; the account locks on its own when the demo ends, until the platform owner gives it
                     another 14 days or marks it as paid
@@ -18,9 +16,9 @@ from datetime import datetime, timedelta, timezone
 
 from flask import abort, flash, g, redirect, render_template, request, send_file, session, url_for
 
-import sms
 
 TRIAL_DAYS = int(os.environ.get("TRIAL_DAYS", "14"))
+GRACE_DAYS = max(0, int(os.environ.get("DEMO_GRACE_DAYS", "3")))   # after the demo ends, before the account locks
 SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL") or os.environ.get("ADMIN_EMAIL", "")
 CHECK_SECONDS = max(30, int(os.environ.get("REMINDER_CHECK_SECONDS", "300")))
 HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
@@ -34,11 +32,8 @@ COMPANY_COLS = {
     "paused_reason": "TEXT DEFAULT ''",     # 'trial_ended' when the trial paused it
     "brand_color": "TEXT DEFAULT ''",
     "logo_file": "TEXT DEFAULT ''",
-    "reminders_on": "INTEGER DEFAULT 1",
-    "reminder_days": "INTEGER DEFAULT 2",
-    "reminder_max": "INTEGER DEFAULT 3",
 }
-PACKET_COLS = {"client_phone": "TEXT DEFAULT ''", "reminder_count": "INTEGER DEFAULT 0", "last_reminder_at": "TEXT"}
+PACKET_COLS = {}
 
 
 def init_db(conn):
@@ -100,6 +95,22 @@ def trial_days_left(c):
     return max(0, -(-int((end - utcnow()).total_seconds()) // 86400))  # round up: 1.2 days left -> 2
 
 
+def lock_at(c):
+    """When a demo company locks: the end of the demo plus the grace days."""
+    end = parse((c or {}).get("trial_ends_at"))
+    return end + timedelta(days=GRACE_DAYS) if end else None
+
+
+def grace_days_left(c):
+    """Days of grace left after the demo ended (None when not in grace)."""
+    if not c or c.get("plan") != "trial":
+        return None
+    end, lock = parse(c.get("trial_ends_at")), lock_at(c)
+    if not end or end > utcnow() or not lock or lock <= utcnow():
+        return None
+    return max(1, -(-int((lock - utcnow()).total_seconds()) // 86400))
+
+
 def paused_message(company, platform):
     if company and company.get("paused_reason") == "trial_ended":
         who = f" contact {SUPPORT_EMAIL}" if SUPPORT_EMAIL else f" contact {platform}"
@@ -157,7 +168,7 @@ def brand_of(c, base_url=""):
 # ---------------------------------------------------------------- register
 def register(A):
     app, db = A.app, A.db
-    state = {"base": "", "thread": None, "last_trial_check": 0.0}
+    state = {"thread": None, "last_trial_check": 0.0}
     temporary = storage_is_temporary(A.DATA_DIR)
     if temporary:
         app.logger.error("STORAGE WARNING: %s is not on a persistent disk. Everything (companies, packets, signed "
@@ -167,28 +178,17 @@ def register(A):
     brand_dir = os.path.join(A.DATA_DIR, "brand")
     os.makedirs(brand_dir, exist_ok=True)
 
-    def base_url():
-        return A.BASE_URL or state["base"]
-
-    def add_event(conn, pid, type_, detail):
-        conn.execute("INSERT INTO events (packet_id, type, detail, ip, at) VALUES (?,?,?,?,?)",
-                     (pid, type_, detail, "", A.now()))
-
     # ------------------------------------------------ page context
     @app.context_processor
     def inject_extras():
         c = g.get("company")
-        return {"storage_temporary": temporary, "sms_enabled": sms.enabled(), "support_email": SUPPORT_EMAIL,
-                "trial_days_left": trial_days_left(c), "brand": brand_of(c), "sms_pretty": sms.pretty,
-                "reminder_info": reminder_info}
+        return {"storage_temporary": temporary, "support_email": SUPPORT_EMAIL,
+                "trial_days_left": trial_days_left(c), "brand": brand_of(c)}
 
     @app.before_request
     def extras_before():
-        if not state["base"] and request.url_root:
-            state["base"] = request.url_root.rstrip("/")   # for links in background emails when BASE_URL is empty
-            A.BACKGROUND_BASE = state["base"]
         if state["thread"] is None and not app.config.get("EXTRAS_NO_THREAD"):
-            state["thread"] = threading.Thread(target=_loop, daemon=True, name="reminders")
+            state["thread"] = threading.Thread(target=_loop, daemon=True, name="demo-check")
             state["thread"].start()
         # a trial that has just ended pauses the company right away, even between background checks
         if time.time() - state["last_trial_check"] > 60:
@@ -196,8 +196,8 @@ def register(A):
             expire_trials(db())
         c = g.get("company")
         if c and c.get("plan") == "trial" and g.get("user") and g.user["id"] != 0:
-            end = parse(c.get("trial_ends_at"))
-            if end and end <= utcnow():
+            lock = lock_at(c)
+            if lock and lock <= utcnow():
                 expire_trials(db())
                 session.pop("uid", None)
                 flash(paused_message(A.get_company(c["id"]), A.PLATFORM_NAME), "error")
@@ -210,136 +210,22 @@ def register(A):
             try:
                 with app.app_context():
                     expire_trials(db())
-                    run_reminders(db())
-                    if hasattr(A, "run_cosigner_reminders"):
-                        A.run_cosigner_reminders(db())
             except Exception:  # noqa: BLE001
-                app.logger.exception("Background reminders check failed; will try again")
+                app.logger.exception("Background demo check failed; will try again")
             time.sleep(CHECK_SECONDS)
 
     def expire_trials(conn):
         """Lock companies whose demo has ended (the managers see the days left at the top of every page)."""
         nowdt = utcnow()
         for c in conn.execute("SELECT * FROM companies WHERE plan='trial' AND status='active' AND trial_ends_at IS NOT "
-                              "NULL AND trial_ends_at <= ?", (iso(nowdt),)).fetchall():
+                              "NULL AND trial_ends_at <= ?", (iso(nowdt - timedelta(days=GRACE_DAYS)),)).fetchall():
             n = conn.execute("UPDATE companies SET status='suspended', paused_reason='trial_ended' WHERE id=? AND "
                              "status='active'", (c["id"],)).rowcount
             conn.commit()
             if n:
                 app.logger.info("Demo ended: %s (company %s) is now locked", c["name"], c["id"])
 
-    def reminder_info(p):
-        """For the packet page: how automatic reminders stand for one packet."""
-        c = g.get("company") or {}
-        if not c.get("reminders_on"):
-            return {"on": False}
-        days, most = c.get("reminder_days") or 2, c.get("reminder_max") or 3
-        sent = p["reminder_count"] or 0
-        last = parse(p["last_reminder_at"] or p["sent_at"])
-        nxt = (last + timedelta(days=days)) if last and sent < most else None
-        exp = parse(p["expires_at"])
-        if nxt and exp and nxt > exp:
-            nxt = None
-        can = sms.enabled() and bool(p["client_phone"])
-        return {"on": True, "sent": sent, "max": most, "days": days, "next": iso(nxt) if nxt else None, "can": bool(can)}
-
-    def run_reminders(conn):
-        """Text every client who still hasn't finished, on their company's schedule."""
-        if not sms.enabled():
-            return 0
-        base = base_url()
-        if not base:
-            return 0
-        nowdt = utcnow()
-        done = 0
-        rows = conn.execute(
-            "SELECT p.*, c.name AS company_name, c.reminder_days, c.reminder_max FROM packets p "
-            "JOIN companies c ON c.id = p.company_id WHERE c.status='active' AND c.reminders_on=1 "
-            "AND p.completed_at IS NULL AND p.voided_at IS NULL AND p.sent_at IS NOT NULL AND p.expires_at > ? "
-            "AND COALESCE(p.client_phone, '') != '' AND COALESCE(p.reminder_count, 0) < c.reminder_max", (iso(nowdt),)).fetchall()
-        for p in rows:
-            last_raw = p["last_reminder_at"] or p["sent_at"]
-            last = parse(last_raw)
-            if not last or nowdt - last < timedelta(days=max(1, p["reminder_days"] or 2)):
-                continue
-            # claim it, so two server processes never send the same reminder twice
-            n = conn.execute("UPDATE packets SET last_reminder_at=?, reminder_count=COALESCE(reminder_count,0)+1 "
-                             "WHERE id=? AND COALESCE(last_reminder_at, sent_at)=? AND COALESCE(reminder_count,0)=?",
-                             (A.now(), p["id"], last_raw, p["reminder_count"] or 0)).rowcount
-            conn.commit()
-            if not n:
-                continue
-            label = f"automatic reminder {(p['reminder_count'] or 0) + 1} of {p['reminder_max']}"
-            try:
-                sms.send(p["client_phone"], text_body(p["company_name"], p["client_name"], f"{base}/s/{p['token']}",
-                                                      reminder=True))
-                add_event(conn, p["id"], "reminder", f"{label} by text")
-                done += 1
-            except Exception as exc:  # noqa: BLE001  (nothing went out: don't use up a reminder)
-                add_event(conn, p["id"], "text_failed", f"{label}: {str(exc)[:160]}")
-                conn.execute("UPDATE packets SET reminder_count=MAX(COALESCE(reminder_count,0)-1, 0) WHERE id=?", (p["id"],))
-            conn.commit()
-        return done
-
-    A.run_reminders = run_reminders
     A.expire_trials = expire_trials
-
-    # ------------------------------------------------ text messages
-    def text_body(business, client_name, link, reminder=False):
-        first = (client_name or "").split(" ")[0]
-        if reminder:
-            return f"{business}: Hi {first}, a reminder that your forms are still waiting for your signature: {link}"
-        return f"{business}: Hi {first}, please review and sign your forms here: {link}"
-
-    def text_packet(pid):
-        """Send the signing link by text. Returns True if it went out (and flashes the result)."""
-        p = db().execute("SELECT * FROM packets WHERE id=?", (pid,)).fetchone()
-        if not sms.enabled():
-            flash("Texting isn't set up on this server yet.", "error")
-            return False
-        if not p["client_phone"]:
-            flash("Add the client's mobile number first.", "error")
-            return False
-        try:
-            sms.send(p["client_phone"], text_body(A.biz(), p["client_name"], A.signing_url(p["token"])))
-        except RuntimeError as exc:
-            A.log_event(pid, "text_failed", str(exc)[:200])
-            db().commit()
-            flash(f"The text didn't go out ({exc}). You can still copy the link below.", "error")
-            return False
-        if p["status"] == "draft":
-            db().execute("UPDATE packets SET status='sent', sent_at=? WHERE id=?", (A.now(), pid))
-        db().execute("UPDATE packets SET last_reminder_at=? WHERE id=?", (A.now(), pid))
-        A.log_event(pid, "sent", f"by text to {sms.pretty(p['client_phone'])} · by {A.actor()}")
-        db().commit()
-        flash(f"Texted to {sms.pretty(p['client_phone'])}.", "ok")
-        if hasattr(A, "notify_cosigners"):
-            A.notify_cosigners(pid, "text")
-        return True
-
-    A.text_packet = text_packet
-
-    @app.route("/packets/<int:pid>/text", methods=["POST"])
-    @A.login_required
-    def text_packet_view(pid):
-        text_packet(pid)
-        return redirect(url_for("packet_detail", pid=pid))
-
-    @app.route("/packets/<int:pid>/phone", methods=["POST"])
-    @A.login_required
-    def packet_phone(pid):
-        raw = request.form.get("client_phone", "").strip()
-        phone = sms.normalize(raw) if raw else ""
-        if raw and not phone:
-            flash("That doesn't look like a mobile number. Use 10 digits, like 613-555-0123.", "error")
-        else:
-            db().execute("UPDATE packets SET client_phone=? WHERE id=?", (phone, pid))
-            A.log_event(pid, "details", f"mobile number {'updated' if phone else 'removed'} by {A.actor()}")
-            db().commit()
-            flash("Mobile number saved." if phone else "Mobile number removed.", "ok")
-            if phone and request.form.get("send") == "1":
-                text_packet(pid)
-        return redirect(url_for("packet_detail", pid=pid))
 
     # ------------------------------------------------ branding
     @app.route("/brand/<int:company_id>/<name>")
@@ -389,21 +275,3 @@ def register(A):
                 pass
         flash("Branding saved. Your clients see it on the signing pages.", "ok")
         return redirect(url_for("company_settings") + "#brand")
-
-    @app.route("/company/reminders", methods=["POST"])
-    @A.manager_required
-    def company_reminders():
-        on = 1 if request.form.get("reminders_on") == "on" else 0
-        try:
-            days = int(request.form.get("reminder_days", "2"))
-            most = int(request.form.get("reminder_max", "3"))
-        except ValueError:
-            days, most = 0, 0
-        if not (1 <= days <= 14 and 1 <= most <= 10):
-            flash("Choose between 1 and 14 days, and between 1 and 10 reminders.", "error")
-        else:
-            db().execute("UPDATE companies SET reminders_on=?, reminder_days=?, reminder_max=? WHERE id=?",
-                         (on, days, most, A.cid()))
-            db().commit()
-            flash("Automatic reminders are on." if on else "Automatic reminders are off.", "ok")
-        return redirect(url_for("company_settings") + "#reminders")

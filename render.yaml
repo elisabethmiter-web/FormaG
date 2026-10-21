@@ -4,6 +4,7 @@ services:
     name: formsign
     runtime: docker          # Docker includes LibreOffice so Word/Excel files show on the signing page
     dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
     plan: starter            # a persistent disk needs a paid plan (about US$7/month)
     disk:
       name: formsign-data
@@ -28,9 +29,21 @@ services:
         sync: false
       - key: TRIAL_DAYS
         value: "14"
-      - key: TWILIO_ACCOUNT_SID    # optional: text messages
+      - key: DEMO_GRACE_DAYS
+        value: "3"
+      - key: SUPPORT_NAME
         sync: false
-      - key: TWILIO_AUTH_TOKEN
+      - key: SUPPORT_PHONE
         sync: false
-      - key: TWILIO_FROM
+      - key: HELP_VIDEO_URL
+        sync: false
+      - key: BACKUP_S3_ENDPOINT      # optional off-site backups (Backblaze B2 or Amazon S3)
+        sync: false
+      - key: BACKUP_S3_BUCKET
+        sync: false
+      - key: BACKUP_S3_REGION
+        sync: false
+      - key: BACKUP_S3_KEY_ID
+        sync: false
+      - key: BACKUP_S3_SECRET
         sync: false

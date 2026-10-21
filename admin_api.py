@@ -159,6 +159,7 @@ def register(A):
                 "source": c.get("source") or "", "created_at": c["created_at"], "admin_notes": c.get("admin_notes") or "",
                 "plan": c.get("plan") or "paid", "trial_ends_at": c.get("trial_ends_at"),
                 "trial_days_left": extras.trial_days_left(c), "paused_reason": c.get("paused_reason") or "",
+                "grace_days_left": extras.grace_days_left(c),
                 "billing": billing_stats(c["id"]),
                 **stats(c["id"])}
 
@@ -168,6 +169,7 @@ def register(A):
         rows = db().execute("SELECT * FROM companies ORDER BY name COLLATE NOCASE").fetchall()
         return jsonify({"app": A.PLATFORM_NAME, "time": A.now(), "sign_within_hours": A.SIGN_WITHIN_HOURS,
                         "storage_temporary": bool(getattr(A, "STORAGE_TEMPORARY", False)), "trial_days": extras.TRIAL_DAYS,
+                        "backup": A.backup_status() if hasattr(A, "backup_status") else None,
                         "companies": [company_json(r) for r in rows]})
 
     @app.route("/api/admin/companies/<int:cid>")
@@ -260,6 +262,60 @@ def register(A):
             "SELECT * FROM invoices WHERE company_id=? ORDER BY issued_on DESC, id DESC", (cid,))]
         return jsonify({"company": company_json(c), "invoices": rows, "billing": billing_stats(cid),
                         "defaults": invoice_defaults(cid), "today": today()})
+
+    @app.route("/api/admin/backup", methods=["GET", "POST"])
+    @api
+    def admin_api_backup():
+        """Backup status; POST makes a backup now."""
+        if request.method == "POST":
+            name = A.make_backup()
+            st = A.backup_status()
+            if not name:
+                return jsonify({"error": st.get("error") or "A backup is already running. Try again in a minute.",
+                                "backup": st}), 409
+            return jsonify({"ok": True, "message": f"Backup {name} made.", "backup": st})
+        return jsonify({**A.backup_status(), "files": A.backup_files(), "last_restore": A.last_restore()})
+
+    @app.route("/api/admin/backup/restore", methods=["POST"])
+    @api
+    def admin_api_backup_restore():
+        """Restore one of the backups on the disk: {"file": name, "confirm": "RESTORE"}."""
+        data = request.get_json(silent=True) or {}
+        if str(data.get("confirm", "")).strip().upper() != "RESTORE":
+            return jsonify({"error": "Type RESTORE to confirm."}), 400
+        try:
+            r = A.restore_backup(str(data.get("file", "")))
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        return jsonify({"ok": True, **r, "message": f"Restored {r['restored']} ({r['companies']} companies, "
+                        f"{r['packets']} packets). Today's data was saved first as {r['safety']}."})
+
+    @app.route("/api/admin/backup/upload", methods=["POST"])
+    @api
+    def admin_api_backup_upload():
+        """Raw ZIP body (a backup downloaded earlier or from off-site storage), saved so it can be restored."""
+        request.max_content_length = 50 * 1024 ** 3   # backups can be much bigger than a normal upload (None would mean the app limit)
+        try:
+            r = A.save_uploaded_backup(request.stream, request.content_length or 0)
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        return jsonify({"ok": True, **r, "message": f"Backup uploaded as {r['file']} ({r['companies']} companies, "
+                        f"{r['packets']} packets). Click Restore next to it to put it back."})
+
+    @app.route("/api/admin/backup/download")
+    @api
+    def admin_api_backup_download():
+        want = request.args.get("file", "")
+        if want:
+            if want not in {f["name"] for f in A.backup_files()}:
+                abort(404)
+            name = want
+        else:
+            name = A.backup_status()["latest"]
+            if not name:
+                abort(404)
+        return A.send_file(os.path.join(A.DATA_DIR, "backups", name), mimetype="application/zip",
+                           as_attachment=True, download_name=name)
 
     @app.route("/api/admin/invoices")
     @api

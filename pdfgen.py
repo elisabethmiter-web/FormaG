@@ -146,13 +146,23 @@ def _certificate(meta, sig_path):
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
     ]))
     consent = _p("The signer agreed to sign electronically and confirmed that their electronic signature is "
-                 "the legal equivalent of their handwritten signature for this document." + SEAL_NOTE, SMALL)
+                 "the legal equivalent of their handwritten signature for this document." + seal_note(meta), SMALL)
     return [Spacer(1, 6), KeepTogether([sig_box]), Spacer(1, 16), _p("Signing record", H2), t,
             Spacer(1, 10), consent]
 
 
 SEAL_NOTE = (" This PDF is digitally sealed when it is created: any change made to it afterwards shows in the "
              "Signatures panel of Adobe Acrobat Reader.")
+
+
+def seal_note(meta):
+    """How to check this copy: the free verify page, and what Adobe's seal message means."""
+    note = SEAL_NOTE + (" Adobe may describe the signer's identity as unknown or not verified: that only means the seal "
+                        f"uses {meta.get('business', 'the business')}'s own signing certificate rather than one bought "
+                        "from a certificate company. It does not affect the signatures or show any change.")
+    if meta.get("verify_url"):
+        note += f" To confirm this copy is authentic and unchanged, upload it at {meta['verify_url']}."
+    return note
 
 
 def _certificate_multi(meta, signers):
@@ -184,7 +194,7 @@ def _certificate_multi(meta, signers):
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
     ]))
     consent = _p("Each signer agreed to sign electronically and confirmed that their electronic signature is the "
-                 "legal equivalent of their handwritten signature for this document." + SEAL_NOTE, SMALL)
+                 "legal equivalent of their handwritten signature for this document." + seal_note(meta), SMALL)
     return [Spacer(1, 6), KeepTogether([sig_row]), Spacer(1, 16), _p("Signing record", H2), t, Spacer(1, 10), consent]
 
 

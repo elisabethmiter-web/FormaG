@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Help{% endblock %}
+{% block content %}
+<div class="page-head"><div><span class="eyebrow">Help</span><h1>How to use {{ platform_name }}</h1>
+<p class="muted">The essentials in two minutes.{% if help_video_url %} Prefer to watch? <a href="{{ help_video_url }}" target="_blank" rel="noopener">See the how-it-works video</a>.{% endif %}</p></div></div>
+<div class="help-grid">
+<section class="panel stack help-card">
+  <h2>1. Send forms to a client</h2>
+  <ol class="small">
+    <li>Click <strong>New packet</strong>, type the client's name (earlier clients are suggested as you type).</li>
+    <li>Tick the forms, or click a <strong>bundle</strong> to tick a set in one go. Add one-off files if needed.{% if has_approvals %} For a stone &amp; seam layout choice or a template drawing, use those sections.{% endif %}</li>
+    <li>Click <strong>Create signing link</strong>, then <strong>Open in my email</strong> or <strong>Text from my phone</strong>: your own email or phone opens with the message ready. Or <strong>Copy message</strong> and paste it anywhere.</li>
+  </ol>
+</section>
+<section class="panel stack help-card">
+  <h2>2. Client in front of you?</h2>
+  <p class="small">Click <strong>Sign now on this device</strong>. The tablet shows only the signing pages; when they're done, enter your password to get back to your screens.</p>
+</section>
+<section class="panel stack help-card">
+  <h2>3. Keep track</h2>
+  <ul class="small">
+    <li>The <strong>Packets</strong> page shows who has opened and signed, and <strong>New since your last visit</strong> lists what changed. Turn on <strong>desktop alerts</strong> there to get a pop-up while the app is open.</li>
+    <li><strong>Follow-up</strong> lists who to remind today, with the reminder ready to send.</li>
+    <li>Record calls and notes in <strong>Follow-ups &amp; notes</strong> on each packet.</li>
+  </ul>
+</section>
+<section class="panel stack help-card">
+  <h2>4. Two owners</h2>
+  <p class="small">Choose <strong>Two owners must both sign</strong>. Each owner gets their own link; the second signs after the first. The packet page and Follow-up show when it's the second owner's turn.</p>
+</section>
+<section class="panel stack help-card">
+  <h2>5. Signed copies</h2>
+  <p class="small">When everyone has signed, the packet shows <strong>Signed</strong>. Use <strong>Download all</strong> for the signed PDFs, the audit trail and any files from the client in one ZIP. Clients download theirs from their link at any time.</p>
+</section>
+<section class="panel stack help-card">
+  <h2>6. Keeping documents private</h2>
+  <p class="small">Tick <strong>Require an access code</strong> on New packet for sensitive packets. Give the 4-digit code to the client by phone or in person, never in the same message as the link.</p>
+</section>
+<section class="panel stack help-card">
+  <h2>7. Is a signed PDF genuine?</h2>
+  <p class="small">Anyone can upload a signed PDF at <a href="{{ url_for('verify') }}" target="_blank">{{ url_for('verify', _external=True) }}</a> to check it's authentic and unchanged.</p>
+</section>
+<section class="panel stack help-card">
+  <h2>8. Questions and problems</h2>
+  <ul class="small">
+    <li><strong>Forgot your password?</strong> Ask a manager to reset it from the Team page.{% if support_name or support_phone or support_email %} Managers: contact {{ support_name or 'support' }}{% if support_phone %} at {{ support_phone }}{% endif %}{% if support_email %} or {{ support_email }}{% endif %}.{% endif %}</li>
+    <li><strong>Client lost the link?</strong> Open the packet and send it again; use <strong>Extend link</strong> if it expired.</li>
+    <li><strong>Page says the service is restarting?</strong> Wait a minute: the client's signature stays on the page and is sent automatically.</li>
+  </ul>
+</section>
+</div>
+{% endblock %}

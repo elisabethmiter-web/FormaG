@@ -26,6 +26,13 @@
 </div>
 
 <div class="grid-2" style="align-items:start;margin-top:20px">
+<form method="post" action="{{ url_for('company_timezone') }}" class="panel stack" id="timezone">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <h2>Time zone</h2>
+  <p class="muted small" style="margin:0">Dates, times and signing deadlines show in this time zone, for your team and on your clients' pages.</p>
+  <label for="tz">Time zone<select id="tz" name="timezone">{% for tzv, label in timezones %}<option value="{{ tzv }}" {{ 'selected' if (c.timezone or 'America/Toronto') == tzv }}>{{ label }}</option>{% endfor %}</select></label>
+  <div><button class="btn btn-primary">Save time zone</button></div>
+</form>
 <form method="post" action="{{ url_for('company_brand') }}" class="panel stack" id="brand" enctype="multipart/form-data">
   <input type="hidden" name="csrf" value="{{ csrf_token() }}">
   <h2>Logo and colour</h2>
@@ -44,19 +51,5 @@
   <div><button class="btn btn-primary">Save branding</button></div>
 </form>
 
-<form method="post" action="{{ url_for('company_reminders') }}" class="panel stack" id="reminders">
-  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-  <h2>Automatic reminders</h2>
-  <p class="muted small" style="margin:0">Clients who haven't finished signing get a friendly reminder by text message (when their mobile number is on the packet). Reminders stop as soon as they finish, or when the packet is cancelled or its link expires.</p>
-  {% if not sms_enabled %}<div class="flash flash-error">Texting isn't set up on this server yet, so reminders can't go out. Until then, use Copy link or Text the link on each packet.</div>{% endif %}
-  <label class="check"><input type="checkbox" name="reminders_on" {{ 'checked' if c.reminders_on }}> Send automatic reminders</label>
-  <div class="grid-2">
-    <label for="reminder_days">Every <span class="hint">days without signing</span>
-      <input id="reminder_days" type="number" name="reminder_days" min="1" max="14" value="{{ c.reminder_days or 2 }}"></label>
-    <label for="reminder_max">At most <span class="hint">reminders per packet</span>
-      <input id="reminder_max" type="number" name="reminder_max" min="1" max="10" value="{{ c.reminder_max or 3 }}"></label>
-  </div>
-  <div><button class="btn btn-primary">Save reminders</button></div>
-</form>
 </div>
 {% endblock %}

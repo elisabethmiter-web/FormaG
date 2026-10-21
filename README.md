@@ -6,7 +6,7 @@ A small web app for sending forms to clients for e-signature and getting confirm
 
 - **Form library**: upload PDF forms (engagement letters, consents, contracts) or build fillable forms (intake questionnaires, authorizations). PDFs can also carry extra fields for the client to fill in.
 - **Signing packets**: bundle several forms for one client, in the order you choose, behind one private link.
-- **Send**: copy the link into your own email or message, text it from the app (optional Twilio), or have the client sign right away on your device. The app doesn't send email.
+- **Send**: copy the link into your own email or message, or have the client sign right away on your device. The app doesn't send emails or texts.
 - **Track and confirm**: each packet shows Sent → Opened → In progress → Signed, with a timestamped activity log. When the client finishes, they see a confirmation number and download their signed copies; you see "Confirmed" on the packet and download the signed PDFs from it.
 - **Signed PDFs**: the original pages, stamped with a signing footer, plus a signature certificate page (signature, name, time, IP address, device, SHA-256 fingerprint of the original file). A per-packet audit trail PDF is one click away.
 
@@ -23,7 +23,7 @@ Signatures are "simple electronic signatures" (drawn or typed, plus consent and 
 
 ## Companies (one server, many businesses)
 
-Each company that uses FormSign gets its **own account**: its own managers and staff, its own form library, its own packets and signed copies. One company can never see another's data, and clients see the company's own name on signing pages, emails and signed PDFs.
+Each company that uses FormSign gets its **own account**: its own managers and staff, its own form library, its own packets and signed copies. One company can never see another's data, and clients see the company's own name on signing pages and signed PDFs.
 
 - **Self sign-up**: a new company clicks **Create your company account** on the sign-in page, enters its company name, the person's name, email and password, and is ready to go. That person is the company's first manager. Turn this off with `ALLOW_SIGNUP=0`.
 - **Platform owner (you)**: sign in with **admin** and the `ADMIN_PASSWORD` setting. You see the **Companies** screen: every company with its logins, packets, storage used and last activity. From there you can:
@@ -31,13 +31,13 @@ Each company that uses FormSign gets its **own account**: its own managers and s
   - **Open** a company to help it, with management access. An orange bar shows you're inside it; **Back to all companies** takes you out.
   - **Pause** a company (for example, unpaid account): its team can't sign in until you turn it back on. Nothing is deleted, and signing links already sent to its clients keep working.
   - **Change** the storage included for a company (default 25 GB, set with `INCLUDED_STORAGE_GB`).
-- **Company page** (managers): change the company name clients see, set the logo, colour and reminder schedule, and see storage used against the storage included.
+- **Company page** (managers): change the company name clients see, set the logo and colour, and see storage used against the storage included.
 - **Sign-in**: everyone signs in with their email and password. The email decides which company they belong to, so each email can only have one login.
 - **Upgrading** from the single-company version: on first start, everything already in the database becomes one company named after your old `BUSINESS_NAME` setting. Nothing else changes for those users.
 
 ## Two owners sign
 
-On the New packet page choose **Two owners must both sign** and add the second owner's name (and mobile, to text them). Each owner gets their own link, which you copy or text to them. The second owner signs each form after the first, seeing exactly what was filled in and chosen. The packet completes only when both have signed everything. Both signatures go on the signed PDF and in the signing record. When the first owner finishes, the second owner gets a "your turn" text (when texting is set up), and automatic text reminders go to whichever owner still has forms waiting.
+On the New packet page choose **Two owners must both sign** and add the second owner's name (and email, for your records). Each owner gets their own link, which you copy and send them. The second owner signs each form after the first, seeing exactly what was filled in and chosen. The packet completes only when both have signed everything. Both signatures go on the signed PDF and in the signing record. The packet page shows when the second owner has forms ready to sign, so you can let them know.
 
 ## Photos and files from the client
 
@@ -61,11 +61,11 @@ Every signed PDF and audit trail is digitally sealed. If anyone changes the file
 
 ## Export to Excel
 
-**Export to Excel** on the Packets page downloads every packet you can see (or only the ones matching your search, optionally by date created): client, email, mobile, second owner, SO#, sales rep, dates, status, forms and files from the client.
+**Export to Excel** on the Packets page downloads every packet you can see (or only the ones matching your search, optionally by date created): client, email, second owner, SO#, sales rep, dates, status, forms and files from the client.
 
 ## 14-day demo (locks on its own)
 
-Companies that sign up themselves get a 14-day demo (`TRIAL_DAYS`). When you add a company yourself, tick **Start as a 14-day demo** to do the same (it's ticked by default). Managers see the days left at the top of every page. When the demo ends, the company **locks on its own**: its team is signed out and can't sign in, and the sign-in page tells them to contact `SUPPORT_EMAIL`. Nothing is deleted, and signing links already sent to clients keep working. The company shows as "Demo ended" on your Companies screen and in the Admin Console.
+Companies that sign up themselves get a 14-day demo (`TRIAL_DAYS`). When you add a company yourself, tick **Start as a 14-day demo** to do the same (it's ticked by default). Managers see the days left at the top of every page. When the demo ends, managers see a red banner for 3 days (`DEMO_GRACE_DAYS`); then the company **locks on its own**: its team is signed out and can't sign in, and the sign-in page tells them to contact `SUPPORT_EMAIL`. Nothing is deleted, and signing links already sent to clients keep working. The company shows as "Demo ended" on your Companies screen and in the Admin Console.
 
 **+14 days demo** (on the Companies screen or in the Admin Console) unlocks the company for another 14 days; you can do this as many times as you like. **Mark as paid** keeps it on for good.
 
@@ -73,17 +73,9 @@ Companies that sign up themselves get a 14-day demo (`TRIAL_DAYS`). When you add
 
 The Admin Console has a **Billing** page for every company to record the invoices you send and whether each one has been paid. The invoices are stored in this app's database, are visible only through the Admin Console (never to the company), and count nothing toward the company's storage. `INVOICE_DEFAULT_AMOUNT` (default 185.00) and `INVOICE_CURRENCY` (default CAD) set the amount suggested for a new invoice.
 
-## Automatic reminders
-
-Clients who haven't finished signing get a friendly reminder by text message, when their mobile number is on the packet and texting is set up. Each company sets the schedule under **Company → Automatic reminders** (default: every 2 days, at most 3). Reminders stop when the client finishes, or the packet is cancelled or its link expires. Texting the link by hand restarts the clock. Each reminder appears in the packet's Activity list. A reminder that fails to send doesn't count and is tried again later.
-
 ## Logo and colour
 
 Managers upload their logo and choose a colour under **Company → Logo and colour**. Clients see them on the signing pages.
-
-## Text messages (optional)
-
-With a [Twilio](https://www.twilio.com) account, staff can text the signing link (a box on the New packet page, or **Text the link** on a packet), and reminders also go by text. Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_FROM` (your Twilio number, like `+16135550100`, or a Messaging Service id starting with MG). A text costs about 1¢ in Canada and the US. Twilio handles replies of STOP automatically.
 
 ## Storage warning
 
@@ -117,6 +109,23 @@ The client reads every document right above where they sign:
 - PDFs are shown on screen and stamped with the signature. Other files are downloaded by the client to review; their signed record is a signature page with the file's name and SHA-256 fingerprint (images are shown on that page). The original file is kept with the packet.
 - A packet with only files to review (nothing to sign) completes when the client clicks **Confirm I've received these files**.
 - Only PDFs and common images open in the browser; every other type is always sent as a download, so an uploaded file can never run as a web page.
+
+## Everyday tools
+
+- **Send in one click**: on a packet, **Email it** or **Text it** opens your own email or phone with the message, link and your name filled in, so nothing is typed by hand. **Copy message** copies it instead. Each send or reminder is logged on the packet.
+- **What's new**: the dashboard shows "New since your last visit" (opened, signed, files added) and the Packets menu shows a count. Click **Turn on alerts** and the browser pops up a notice while FormSign is open in a tab.
+- **Follow-up list**: the **Follow-up** page lists every open packet that needs a nudge today (overdue, not opened in 2 days, opened but not finished, waiting on the second owner), each with a ready-made reminder. Once you've reminded someone, they move down to "Already reminded today". The menu shows how many are left.
+- **Who it's waiting on**: with two owners, the dashboard and packet show "Waiting on Emma Wong" so you know who to call.
+- **Download everything**: one ZIP with all signed PDFs, the files from the client and the audit trail, from the packet page or the client's done page. Clients are told to keep their link.
+- **Nightly backups**: every night (1–5 am) the app saves a copy of the database and all files, keeps the last 7 (`BACKUP_KEEP`) and, if you set the `BACKUP_S3_…` settings, copies each one to Backblaze B2 or Amazon S3. The Admin Console shows the last backup, has **Back up now**, lets you download any backup, and has **Restore** (pick a backup on the server or upload one; today's data is saved first so a restore can be undone).
+- **Server restarts don't lose a signature**: if the server is restarting when a client presses Finish, the page waits and sends it again by itself as soon as the server is back. `/healthz` tells Render the app is up.
+- **Access code (optional)**: tick **Ask for an access code** on New packet. The client needs a 6-digit code to open their link; give it to them by phone or text, separately from the link. After 5 wrong tries the link waits 15 minutes. You can change or remove the code on the packet page. Signing on your own device skips the code.
+- **Earlier clients**: typing a client's name on New packet suggests clients you've sent to before and fills in their email.
+- **Faster previews**: Word, Excel and photo previews are prepared in the background as soon as a packet is made, so the client's page opens quickly.
+- **Time zone per company**: managers pick their time zone on the Company page; every time in the app is shown in it.
+- **Check a signed PDF**: anyone can upload a signed PDF at `/verify` to see whether it matches the one signed here, with no certificate to buy. The signing record page explains the "identity unknown" message Adobe shows for the app's own seal, gives the verify address, and `/verify/certificate.cer` lets an office trust the seal in Acrobat if they want.
+- **Demo grace days**: when a demo ends, the company gets a red banner and keeps working for 3 more days (`DEMO_GRACE_DAYS`) before it locks, so nobody loses a client mid-signing.
+- **Help when stuck**: the sign-in page shows who to call (`SUPPORT_NAME`, `SUPPORT_PHONE`, `SUPPORT_EMAIL`), and the **Help** page has step-by-step answers for the common jobs, plus your video link (`HELP_VIDEO_URL`).
 
 ## Run it on your computer (5 minutes)
 
@@ -157,11 +166,17 @@ Any host that runs Docker works too (Railway, Fly.io, a VPS): build the `Dockerf
 | `TRIAL_DAYS` | no | Length of the demo (default 14) |
 | `INVOICE_DEFAULT_AMOUNT` / `INVOICE_CURRENCY` | no | Suggested amount and currency for new invoices in the Admin Console (default 185.00 CAD) |
 | `SUPPORT_EMAIL` | recommended | Shown to companies when their demo ends, as who to contact (for example liz@helmmsp.ca) |
-| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM` | no | Turn on text messages |
-| `REMINDER_CHECK_SECONDS` | no | How often the app checks for reminders and ended trials (default 300) |
+| `DEMO_GRACE_DAYS` | no | Days a company keeps working after its demo ends, with a warning, before it locks (default 3) |
+| `SUPPORT_NAME` / `SUPPORT_PHONE` | recommended | Who to call, shown on the sign-in and Help pages (for example Helm MSP, 1-555-...) |
+| `HELP_VIDEO_URL` | no | Link to a how-to video, shown on the Help page |
+| `BACKUP_KEEP` | no | How many nightly backups to keep on the disk (default 7) |
+| `BACKUPS` | no | `0` turns off nightly backups |
+| `BACKUP_S3_ENDPOINT` | no | Off-site backups: the S3 address, e.g. `https://s3.us-west-004.backblazeb2.com` (Backblaze B2) or `https://s3.ca-central-1.amazonaws.com` |
+| `BACKUP_S3_BUCKET` / `BACKUP_S3_REGION` | no | Bucket name and region (e.g. `us-west-004`, `ca-central-1`) |
+| `BACKUP_S3_KEY_ID` / `BACKUP_S3_SECRET` | no | The application key ID and secret for that bucket (write access is enough) |
 | `STORAGE_CHECK` | no | `0` hides the storage warning; `1` checks even off Render |
 | `BUSINESS_NAME` | no | Only used when upgrading: names the first company |
-| `BASE_URL` | recommended | Public address, used in signing links and texts |
+| `BASE_URL` | recommended | Public address, used in signing links |
 | `DATA_DIR` | no | Storage folder (default `./data`) |
 | `LINK_EXPIRY_DAYS` | no | Default link lifetime, also used by "Extend link" (default 30) |
 

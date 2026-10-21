@@ -8,6 +8,7 @@
     <div class="row"><h1>{{ p.client_name }}</h1><span class="stamp s-{{ state }}">{{ labels[state] }}</span></div>
     <p class="muted">{{ p.client_email or 'no email' }} · <span class="mono">{{ packet_ref(p) }}</span></p></div>
   <div class="row">
+    <a class="btn" href="{{ url_for('packet_zip', pid=p.id) }}" title="Signed PDFs, audit trail and files from the client in one ZIP">Download all</a>
     <a class="btn" href="{{ url_for('admin_audit_pdf', pid=p.id) }}">Audit trail PDF</a>
   </div>
 </div>
@@ -17,34 +18,27 @@
 {% elif deadline.due_at %}
 <div class="flash flash-due">Client target: complete by {{ deadline.due_at|when }} ({{ deadline.label|lower }}).</div>
 {% endif %}
+{% if p.access_code and state not in ('completed','voided') %}
+<div class="flash flash-ok" style="display:flex;gap:16px;align-items:center;flex-wrap:wrap"><span>Access code for {{ p.client_name }}:</span> <span class="code-box">{{ p.access_code }}</span>
+  <span class="small">Give it by phone or in person, not in the same message as the link.</span>
+  <form method="post" action="{{ url_for('packet_access_code', pid=p.id) }}" style="margin-left:auto"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="new"><button class="btn btn-quiet small">New code</button></form></div>
+{% endif %}
 {% if state not in ('completed','voided') %}
 <section class="panel">
   <div class="panel-head"><h2>Signing link</h2><span class="muted small">Valid until {{ p.expires_at|day }}</span></div>
-  <p class="muted small">Copy it into your own email or message to {{ p.client_name }}{{ ', or text it from here' if sms_enabled }}. Anyone with the link can sign, so send it only to your client.</p>
+  <p class="muted small">Send it from your own email or phone with the buttons below, or copy it. Anyone with the link can open it, so send it only to your client{{ '' if p.access_code else ' (or turn on an access code)' }}.</p>
+  {% set qs = quick_message(p, None, p.sent_at and events|selectattr('type','equalto','sent')|list|length > 1) %}{% set kind = 'send' %}{% set who = '' %}{% set primary = true %}
+  <div style="margin-bottom:10px">{% include "_quick_send.html" %}</div>
   <div class="linkbox"><input id="signing-link" type="text" readonly value="{{ link }}" aria-label="Signing link">
     <button class="btn btn-primary" type="button" id="copy-link">Copy link</button>
     <a class="btn btn-quiet" href="{{ link }}" target="_blank" rel="noopener">Preview as client</a></div>
   <div class="row">
-    {% if sms_enabled and p.client_phone %}
-    <form method="post" action="{{ url_for('text_packet_view', pid=p.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn">Text the link</button></form>
-    {% endif %}
     <form method="post" action="{{ url_for('in_person', pid=p.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn" title="Your client signs on this device now">Sign now on this device</button></form>
+    <form method="post" action="{{ url_for('packet_access_code', pid=p.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="{{ 'off' if p.access_code else 'on' }}"><button class="btn btn-quiet">{{ 'Turn off access code' if p.access_code else 'Require an access code' }}</button></form>
     <form method="post" action="{{ url_for('extend_packet', pid=p.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn btn-quiet">Extend link</button></form>
     <form method="post" action="{{ url_for('void_packet', pid=p.id) }}" data-confirm="Cancel this packet? The link will stop working and can't be reopened."><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn btn-quiet btn-danger">Cancel packet</button></form>
   </div>
-  <form method="post" action="{{ url_for('packet_phone', pid=p.id) }}" class="row" style="gap:8px;margin-top:12px;align-items:flex-end">
-    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-    <label for="client_phone" style="flex:1;min-width:200px">Client mobile <span class="hint">{{ 'For texts and text reminders' if sms_enabled else 'Saved for when texting is set up' }}</span>
-      <input id="client_phone" type="tel" name="client_phone" value="{{ sms_pretty(p.client_phone) if p.client_phone }}" placeholder="613-555-0123"></label>
-    <button class="btn btn-quiet">Save number</button>
-    {% if sms_enabled and not p.client_phone %}<button class="btn" name="send" value="1">Save and text the link</button>{% endif %}
-  </form>
-  {% set ri = reminder_info(p) %}
-  <p class="muted small" style="margin:12px 0 0">
-  {% if not ri.on %}Automatic reminders are off for your company{% if is_manager %} (<a href="{{ url_for('company_settings') }}#reminders">turn on</a>){% endif %}.
-  {% elif not ri.can %}Automatic reminders go by text: {{ 'add the client\'s mobile number above.' if sms_enabled else 'texting isn\'t set up on this server yet.' }}
-  {% elif ri.next %}Automatic reminder {{ ri.sent + 1 }} of {{ ri.max }} goes out around {{ ri.next|when }} if {{ p.client_name.split(' ')[0] }} hasn't finished.
-  {% else %}All {{ ri.max }} automatic reminders have been sent{{ ' or the link expires first' if ri.sent < ri.max }}.{% endif %}</p>
+
 
 </section>
 {% elif state=='completed' %}
@@ -120,6 +114,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
+<script src="{{ url_for('static', filename='quicksend.js') }}"></script>
 <script>
 const btn=document.getElementById('copy-link');
 if(btn){btn.addEventListener('click',async()=>{const i=document.getElementById('signing-link');
