@@ -61,7 +61,7 @@
     <button class="btn btn-primary btn-lg" name="action" value="email" data-web="{{ '0' if email_app() == 'app' else '1' }}" title="Creates the packet and opens a new email to your client with the message and link ready">✉ Create and open in Email</button>
     <button class="btn btn-lg" name="action" value="link">Create signing link</button>
     <button class="btn btn-lg" name="action" value="in_person" title="Your client signs on this device now">Sign now on this device</button>
-    <span class="muted small">Opens {{ 'the email app on this computer' if email_app() == 'app' else EMAIL_APPS[email_app()][0] + ' in a new tab' }} · <a href="{{ url_for('account') }}#email-app">change</a></span>
+    <span class="muted small">Opens your email (Outlook, Apple Mail…) with the message and link written in.</span>
   </div>
 </form>
 {% endblock %}

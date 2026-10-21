@@ -47,6 +47,7 @@ try:
 except ImportError:  # pragma: no cover
     ZoneInfo = None
 
+APP_VERSION = "2026.10.21-4"   # shown at the bottom of the Help page, to check which version is live
 BACKUP_KEEP = max(1, int(os.environ.get("BACKUP_KEEP", "7")))
 RESTORE_FOLDERS = ("templates", "signed", "client_uploads", "brand", "seal")
 SUPPORT_NAME = os.environ.get("SUPPORT_NAME", "")
@@ -275,10 +276,10 @@ def register(A):
         u = g.get("user")
         if not u:
             return "app"
-        v = session.get("email_app") if u["id"] == 0 else u.get("email_app")
-        return v if v in EMAIL_APPS else "app"
+        return "app"   # always the computer's own email app (mailto), as in the first version; webmail is in the ▾ menu
 
     app.jinja_env.globals["email_app"] = email_app
+    app.jinja_env.globals["APP_VERSION"] = APP_VERSION
     app.jinja_env.globals["EMAIL_APPS"] = EMAIL_APPS
 
     # ------------------------------------------------ texting from a computer: scan a code with your phone
@@ -817,7 +818,7 @@ def register(A):
     # ------------------------------------------------ 7  restarts: health check for the signing pages
     @app.route("/healthz")
     def healthz():
-        return jsonify({"ok": True, "time": A.now()})
+        return jsonify({"ok": True, "version": APP_VERSION, "time": A.now()})
 
     # ------------------------------------------------ 8  access code
     GATE = re.compile(r"^/(s|c)/([^/]+)(/.*)?$")

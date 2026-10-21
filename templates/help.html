@@ -16,7 +16,7 @@
     <li>Tick the forms, or click a <strong>bundle</strong> to tick a set in one go. Add one-off files if needed.{% if has_approvals %} Add the SO# and sales rep for your records.{% endif %}</li>
     <li>Click <strong>✉ Create and open in Email</strong>. A new email to your client opens by itself, with the subject, the message and the link to the forms already written in. Check it and press <strong>Send</strong>.</li>
   </ol>
-  <p class="small muted">To send it again later, open the packet and click <strong>✉ Open in Email</strong>. The ▾ next to it picks Outlook on the web, Gmail or your computer's email app. Want the link as a button named after your company and forms? Click <strong>Copy message</strong> and paste it into an empty email instead.</p>
+  <p class="small muted">To send it again later, open the packet and click <strong>✉ Open in Email</strong>. If you use Outlook on the web or Gmail in your browser, pick it from the ▾ next to the button. Want the link as a button named after your company and forms? Click <strong>Copy message</strong> and paste it into an empty email instead.</p>
 </section>
 
 <section class="panel stack help-card" id="text">
@@ -92,7 +92,7 @@
 
 <section class="panel stack help-card" id="account">
   <h2>{{ 11 if has_approvals else 10 }}. Your account</h2>
-  <p class="small">Click your name at the top to change your password and choose where <strong>Open in Email</strong> opens: the email app on your computer (Outlook, Apple Mail), Outlook on the web (Microsoft 365), Gmail, or Outlook.com. <a href="{{ url_for('account') }}#email-app">Open your account</a>.</p>
+  <p class="small">Click your name at the top to change your password. <strong>Open in Email</strong> uses the email app set as the default on your computer (for example Outlook). If nothing opens, set your default email app in your computer's settings, or use the ▾ next to the button to open Outlook on the web or Gmail instead.</p>
 </section>
 
 <section class="panel stack help-card" id="contact">
@@ -103,7 +103,7 @@
 <section class="panel stack help-card" id="problems">
   <h2>{{ 13 if has_approvals else 12 }}. Common problems</h2>
   <ul class="small">
-    <li><strong>The email didn't open?</strong> Click <strong>✉ Open in Email</strong> on the packet. If you use Outlook on the web or Gmail, allow pop-ups for this site when your browser asks.</li>
+    <li><strong>The email didn't open?</strong> Your computer may not have a default email app. Open the packet and use the ▾ next to <strong>✉ Open in Email</strong> to choose Outlook on the web or Gmail, or set Outlook as the default email app in your computer's settings.</li>
     <li><strong>Text from my phone does nothing on a computer?</strong> Use the code it shows and scan it with your phone.</li>
     <li><strong>Forgot your password?</strong> Ask a manager to reset it from the Team page.</li>
     <li><strong>Client lost the link or it expired?</strong> Open the packet, click <strong>Extend link</strong> if needed, and send it again.</li>
@@ -112,4 +112,5 @@
   </ul>
 </section>
 </div>
+<p class="small muted" style="margin-top:18px">Version {{ APP_VERSION }}</p>
 {% endblock %}
