@@ -63,18 +63,10 @@
       const done = () => { const t = a.textContent; a.textContent = 'Copied ✓'; setTimeout(() => (a.textContent = t), 1800); };
       copyRich(box).then(done, () => copyPlain(box.dataset.text).then(done, () => window.prompt('Copy this message:', box.dataset.text)));
     }
-    if (via === 'email') {
-      if (canRich && a.dataset.paste) {
-        a.href = a.dataset.paste;   // opens an empty message; the copied one (with the clickable link) is pasted in
-        copyRich(box).then(
-          () => toast('<strong>Message copied.</strong> In the new email, click in the message area and press <kbd>' + pasteKey + '</kbd> to paste it, with the clickable link to the forms. Then press Send.', 20000),
-          () => { toast('Couldn\'t copy the message. Close the new email and use <strong>Copy message</strong>, then paste it in.', 20000); });
-      }
-      if (a.dataset.app && box.dataset.setapp) {   // picked another email: remember it as the default
-        const f2 = new FormData(); f2.append('csrf', csrf); f2.append('email_app', a.dataset.app); f2.append('quiet', '1');
-        fetch(box.dataset.setapp, { method: 'POST', body: f2, keepalive: true });
-        const det = a.closest('details'); if (det) det.open = false;
-      }
+    if (via === 'email' && a.dataset.app && box.dataset.setapp) {   // picked another email: remember it as the default
+      const f2 = new FormData(); f2.append('csrf', csrf); f2.append('email_app', a.dataset.app); f2.append('quiet', '1');
+      fetch(box.dataset.setapp, { method: 'POST', body: f2, keepalive: true });
+      const det = a.closest('details'); if (det) det.open = false;
     }
     if (via === 'phone' && !isPhone) {   // computers have no texting app: show a code to scan with the phone
       e.preventDefault();
@@ -86,12 +78,17 @@
     else fetch(box.dataset.nudge, { method: 'POST', body: fd, keepalive: true });
   });
 
-  // Arrived from "Create and open in Email": point at the button (copying the message needs a click).
+  // Arrived from "Create and open in Email": open the email right away (webmail was already opened in a new tab).
   const params = new URLSearchParams(location.search);
-  if (params.get('compose')) {
+  const mode = params.get('compose');
+  if (mode) {
     params.delete('compose');
     history.replaceState(null, '', location.pathname + (params.toString() ? '?' + params : '') + location.hash);
     const main = document.querySelector('#send-panel .quick-send a[data-main]');
-    if (main) { main.focus(); main.classList.add('qs-pulse'); main.scrollIntoView({ block: 'center' }); }
+    if (main && mode === '1') {
+      if (main.getAttribute('href').startsWith('mailto:')) setTimeout(() => main.click(), 300);   // the email app opens
+      else { const w = window.open(main.href, '_blank'); if (w) { const b = document.getElementById('compose-banner-wait'); if (b) b.hidden = true; } }
+    }
+    if (main) { main.classList.add('qs-pulse'); }
   }
 })();

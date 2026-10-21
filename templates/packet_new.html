@@ -58,7 +58,7 @@
   <label for="expiry_days" style="max-width:260px">Link expires after
     <select id="expiry_days" name="expiry_days">{% for d in (7,14,30,60,90) %}<option value="{{ d }}" {{ 'selected' if d==30 }}>{{ d }} days</option>{% endfor %}</select></label>
   <div class="row">
-    <button class="btn btn-primary btn-lg" name="action" value="email" title="Creates the packet and opens a new email to your client with the message and link ready">✉ Create and open in Email</button>
+    <button class="btn btn-primary btn-lg" name="action" value="email" data-web="{{ '0' if email_app() == 'app' else '1' }}" title="Creates the packet and opens a new email to your client with the message and link ready">✉ Create and open in Email</button>
     <button class="btn btn-lg" name="action" value="link">Create signing link</button>
     <button class="btn btn-lg" name="action" value="in_person" title="Your client signs on this device now">Sign now on this device</button>
     <span class="muted small">Opens {{ 'the email app on this computer' if email_app() == 'app' else EMAIL_APPS[email_app()][0] + ' in a new tab' }} · <a href="{{ url_for('account') }}#email-app">change</a></span>
@@ -66,6 +66,32 @@
 </form>
 {% endblock %}
 {% block scripts %}
+<script>
+// "Create and open in Email" with webmail (Outlook on the web, Gmail): browsers only allow a new tab during the click,
+// so the tab opens now and gets the email once the packet is created.
+(function(){
+  const form=document.getElementById('packet-form'), btn=form && form.querySelector('button[value=email]');
+  if(!btn || btn.dataset.web!=='1' || !window.fetch) return;
+  btn.addEventListener('click', async (e)=>{
+    if(!form.reportValidity()) return;
+    e.preventDefault();
+    const w=window.open('', '_blank');
+    if(!w){ submitNormally(); return; }
+    try{ w.document.write('<p style="font:16px system-ui;padding:24px">Opening your email…</p>'); }catch(_){}
+    btn.disabled=true;
+    const fd=new FormData(form); fd.append('action','email');
+    try{
+      const r=await fetch(form.getAttribute('action')||location.href,{method:'POST',body:fd,credentials:'same-origin'});
+      const m=r.redirected && r.url.match(/\/packets\/(\d+)/);
+      if(!m){ w.close(); btn.disabled=false; submitNormally(); return; }
+      const c=await (await fetch('/packets/'+m[1]+'/compose.json',{credentials:'same-origin'})).json();
+      w.location=c.url;
+      location=r.url.replace('compose=1','compose=done');
+    }catch(err){ try{w.close();}catch(_){} btn.disabled=false; submitNormally(); }
+  });
+  function submitNormally(){ const h=document.createElement('input'); h.type='hidden'; h.name='action'; h.value='email'; form.appendChild(h); form.submit(); }
+})();
+</script>
 <script>
 (function(){
   const name=document.getElementById('client_name'), email=document.getElementById('client_email'), list=document.getElementById('client-list');

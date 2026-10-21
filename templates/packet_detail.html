@@ -25,7 +25,8 @@
 {% endif %}
 {% if state not in ('completed','voided') %}
 {% if request.args.get('compose') %}
-<div class="flash flash-ok" role="status" id="compose-banner"><strong>Packet ready.</strong> Click <strong>✉ Open in Email</strong> below: a new email to {{ p.client_name }} opens and the message, with a clickable link to the forms, is copied for you to paste in.{% if p.access_code %} Give the access code separately.{% endif %}</div>
+<div class="flash flash-ok" role="status"><strong>Packet ready.</strong> A new email to {{ p.client_name }} is opening{% if email_app() != 'app' %} in a new tab{% endif %}, with the message and link written in. Check it and press Send.
+  <span id="compose-banner-wait">If it didn't open, click <strong>✉ Open in Email</strong> below{% if email_app() != 'app' %} (your browser may have blocked the new tab){% endif %}.</span>{% if p.access_code %} Give the access code separately.{% endif %}</div>
 {% endif %}
 <section class="panel" id="send-panel">
   <div class="panel-head"><h2>Signing link</h2><span class="muted small">Valid until {{ p.expires_at|day }}</span></div>

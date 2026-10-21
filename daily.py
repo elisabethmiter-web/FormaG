@@ -241,7 +241,7 @@ def register(A):
         else:
             link_text = f"{business} – {forms[0]}, {forms[1]} and {len(forms) - 2} more"
         body = (f"Hi {first_name(name)},\n\n{intro}\n" + "".join(f"  - {f}\n" for f in forms) +
-                f"\nOpen your forms here:\n{link}\n" + (f"\n{due_text}\n" if due_text else "") +
+                f"\nClick here to open your forms ({link_text}):\n{link}\n" + (f"\n{due_text}\n" if due_text else "") +
                 (f"\n{code_text}\n" if code_text else "") + f"\nThank you,\n{sender}\n{business}\n")
         e = escape
         html = (
@@ -316,6 +316,19 @@ def register(A):
         if not r or (parse(r["created_at"]) or utcnow()) < utcnow() - timedelta(minutes=TEXT_LINK_MINUTES):
             return render_template("text_phone.html", text=None), 410
         return render_template("text_phone.html", text=r["body"], sms=f"sms:?&body={urllib.parse.quote(r['body'])}")
+
+    @app.route("/packets/<int:pid>/compose.json")
+    @A.login_required
+    def packet_compose(pid):
+        """The link that opens a new email for this packet; logged as sent by email."""
+        p = db().execute("SELECT * FROM packets WHERE id=?", (pid,)).fetchone() or abort(404)
+        qs = quick_message(p)
+        if p["status"] == "draft":
+            db().execute("UPDATE packets SET status='sent', sent_at=? WHERE id=?", (A.now(), pid))
+        db().execute("UPDATE packets SET last_nudge_at=? WHERE id=?", (A.now(), pid))
+        A.log_event(pid, "sent", f"link for {p['client_name']} via staff member's email · by {A.actor()}")
+        db().commit()
+        return jsonify({"url": qs["compose"], "web": qs["compose_web"]})
 
     @app.route("/account/email-app", methods=["POST"])
     @A.login_required
