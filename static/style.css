@@ -491,9 +491,9 @@ textarea#body { font-family: var(--font-body); line-height: 1.5; }
 
 /* ---------------- interactive dashboard ---------------- */
 .insights { --series-1: #2a78d6; --series-2: #eb6834; --st-good: #0ca30c; --st-warn: #fab219; --st-crit: #d03b3b; --st-neutral: #898781;
-  display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(180px, .7fr); gap: 16px; margin: 0 0 18px; }
+  display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(220px, 1fr); gap: 16px; margin: 0 0 18px; }
 @media (prefers-color-scheme: dark) { .insights { --series-1: #3987e5; --series-2: #d95926; } }
-@media (max-width: 1000px) { .insights { grid-template-columns: 1fr 1fr; } .db-kpis { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; } }
+@media (max-width: 1000px) { .insights { grid-template-columns: 1fr; } .db-kpis { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 640px) { .insights { grid-template-columns: 1fr; } .db-kpis { grid-template-columns: 1fr; } }
 .chart-card { margin: 0; min-width: 0; }
 .chart-card h2 { font-size: 1.05rem; }

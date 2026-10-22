@@ -47,7 +47,7 @@ try:
 except ImportError:  # pragma: no cover
     ZoneInfo = None
 
-APP_VERSION = "2026.10.21-10"   # shown at the bottom of the Help page, to check which version is live
+APP_VERSION = "2026.10.21-11"   # shown at the bottom of the Help page, to check which version is live
 BACKUP_KEEP = max(1, int(os.environ.get("BACKUP_KEEP", "7")))
 RESTORE_FOLDERS = ("templates", "signed", "client_uploads", "brand", "seal")
 SUPPORT_NAME = os.environ.get("SUPPORT_NAME", "")

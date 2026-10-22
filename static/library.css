@@ -70,3 +70,11 @@
 }
 /* bundle rows: the ordered list may shrink (names ellipsize) and Send / Edit wrap below it on phones */
 #bundles .doc-row .doc-main { min-width: 0; flex: 1 1 260px; grid-template-columns: minmax(0, 1fr); }
+
+/* long form names always fit their card or bundle row: they wrap, even file-style names with no spaces */
+.form-card { min-width: 0; }
+.form-card > * { min-width: 0; }
+.form-card .form-title { overflow-wrap: anywhere; word-break: break-word; hyphens: auto; line-height: 1.3; }
+.doc-list .doc-main { min-width: 0; flex-basis: 260px; }
+.lib-border { min-width: 0; }
+.lib-bname { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; line-height: 1.35; padding: 2px 0; }

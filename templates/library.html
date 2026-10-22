@@ -103,7 +103,7 @@
           <button class="lib-arrow" name="dir" value="up" aria-label="Move {{ t.name }} earlier" title="Move earlier" {{ 'disabled' if loop.first }}>↑</button><button class="lib-arrow" name="dir" value="down" aria-label="Move {{ t.name }} later" title="Move later" {{ 'disabled' if loop.last }}>↓</button></form>
       </div>{% endif %}
     </div>
-    <h3>{{ t.name }}</h3>
+    <h3 class="form-title" title="{{ t.name }}">{{ t.name|replace("_", " ") }}</h3>
     <div class="lib-tags" {% if is_manager %}data-url="{{ url_for('library_tags', tid=t.id) }}"{% endif %}>{% for tag in t.tags %}<a class="chip lib-chip" href="{{ lp_tag_href(tag) }}" data-tag="{{ tag }}">{{ tag }}</a>{% endfor %}</div>
     {% if is_manager %}<details class="lib-tagedit"><summary class="small">{{ 'Edit tags' if t.tags else 'Add tags' }}</summary>
       <form method="post" action="{{ url_for('library_tags', tid=t.id) }}" class="row" style="gap:6px;margin-top:6px"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="set">

@@ -316,7 +316,7 @@
     if (!ins) return;
     const c = state.data.charts;
     ins.hidden = false;
-    weeksChart(document.getElementById('chart-weeks'), c.weeks);
+    const wk = document.getElementById('chart-weeks'); if (wk) weeksChart(wk, c.weeks);
     statusChart(document.getElementById('chart-status'), state.data.packets);
     const med = document.getElementById('kpi-median'), within = document.getElementById('kpi-within');
     if (med) med.textContent = c.median_hours === null ? '—' : (c.median_hours < 48 ? Math.round(c.median_hours * 10) / 10 + ' h' : Math.round(c.median_hours / 24 * 10) / 10 + ' days');
