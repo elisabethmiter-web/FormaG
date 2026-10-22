@@ -9,6 +9,7 @@ import hmac
 import os
 import threading
 import time
+import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from functools import wraps
@@ -55,7 +56,7 @@ def utcnow():
     return datetime.now(timezone.utc).replace(microsecond=0)
 
 
-def notify_owner(title, message, click=""):
+def notify_owner(title, message, click="", reply=False):
     """Push notification to the owner's phone (ntfy). Never raises; runs in the background."""
     if not NTFY_TOPIC:
         return False
@@ -65,6 +66,8 @@ def notify_owner(title, message, click=""):
         payload = {"topic": NTFY_TOPIC, "title": title[:120], "message": message, "tags": ["speech_balloon"], "priority": 4}
         if click:
             payload["click"] = click
+        if click and reply:   # ntfy can't take a typed answer, so "Reply" opens the chat where you type it
+            payload["actions"] = [{"action": "view", "label": "Reply", "url": click, "clear": True}]
         headers = {"Content-Type": "application/json"}
         if NTFY_TOKEN:
             headers["Authorization"] = f"Bearer {NTFY_TOKEN}"
@@ -124,8 +127,11 @@ def register(A):
                          (now, t["id"]))
             db().commit()
             company = g.company["name"]
-            click = f"{CONSOLE_URL}/support" if CONSOLE_URL else ""
-            notify_owner(f"{company}: {g.user['name']}", body[:300], click)
+            click = ""
+            if CONSOLE_URL:   # tapping the alert (or Reply) opens this exact chat in the Admin Console
+                host = urllib.parse.urlsplit(getattr(A, "BASE_URL", "") or request.host_url).netloc or request.host
+                click = f"{CONSOLE_URL}/support/go/{host}/{t['id']}"
+            notify_owner(f"{company}: {g.user['name']}", body[:300], click, reply=bool(click))
         t = thread_for(g.user, cid)
         if not t:
             return jsonify({"messages": [], "status": "new", "unread": 0, "hours": SUPPORT_HOURS})
