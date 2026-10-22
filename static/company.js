@@ -12,6 +12,7 @@
     return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4 ? '#10131a' : '#ffffff';
   }
   function page() {
+    if (!$('#pv-title')) return;   // the signing-page preview isn't shown
     const name = company() || 'Your company';
     $('#pv-name').textContent = name;
     $('#pv-title').textContent = name + ' has sent you 2 items to sign';
@@ -27,7 +28,7 @@
   const logoInput = $('#logo');
   if (logoInput) logoInput.addEventListener('change', () => {
     const f = logoInput.files && logoInput.files[0]; if (!f) return;
-    const r = new FileReader(); r.onload = () => { const img = $('#pv-logo'); img.src = r.result; img.hidden = false; $('#pv-name').hidden = true; }; r.readAsDataURL(f);
+    const r = new FileReader(); r.onload = () => { const img = $('#pv-logo'); if (!img) return; img.src = r.result; img.hidden = false; $('#pv-name').hidden = true; }; r.readAsDataURL(f);
   });
 
   function fill(t, v) { return (t || '').replace(/\{(\w+)\}/g, (m, k) => (k in v ? v[k] : m)); }

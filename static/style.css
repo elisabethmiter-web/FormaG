@@ -661,3 +661,17 @@ tr.db-flash td { animation: db-flash 3.5s ease-out; }
 .ret-list li .nowrap { margin-left: auto; }
 .ret-understand { background: var(--bg); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; }
 .ret-understand[hidden] { display: none; }
+
+/* support chat: details before a chat starts, ending a chat */
+.sc-head-btns { display: flex; align-items: center; gap: 4px; }
+.sc-end { white-space: nowrap; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); border-radius: 6px; font: 600 .8rem var(--font-body, inherit); padding: 5px 10px; cursor: pointer; }
+.sc-end:hover { border-color: var(--bad); color: var(--bad); }
+.sc-endbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 14px; background: var(--warn-soft, #fbf0dc); border-bottom: 1px solid var(--rule); font-size: .85rem; }
+.sc-endbar[hidden] { display: none; }
+.sc-endbar span { flex: 1 1 100%; }
+.sc-intro { display: grid; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--rule); overflow-y: auto; max-height: 62%; }
+.sc-intro[hidden], .sc-form[hidden] { display: none; }
+.sc-intro label { font-size: .82rem; font-weight: 600; display: grid; gap: 3px; }
+.sc-intro input { padding: 8px 10px; font-size: .92rem; }
+.sc-intro input[aria-invalid="true"] { border-color: var(--bad); }
+.sc-sys { align-self: center; text-align: center; font-size: .75rem; color: var(--muted); background: var(--bg); border: 1px solid var(--rule); border-radius: 999px; padding: 3px 10px; margin: 2px 0; max-width: 95%; }

@@ -186,7 +186,7 @@
 
 <section class="panel stack help-card" id="contact">
   <h2>{{ 12 if has_approvals else 11 }}. Questions? Contact us</h2>
-  <p class="small"><strong>Contact <a href="mailto:{{ support_email or 'liz@helmmsp.ca' }}">{{ support_email or 'liz@helmmsp.ca' }}</a> or use the support chat.</strong> Click <strong>💬 Support</strong> at the bottom-right of any page{% if support_chat %} (or <a href="#" onclick="document.querySelector('#sc .sc-toggle').click();return false">open it now</a>){% endif %}, type your question and press Enter. You can close the chat and keep working: the Support button shows a red number when there's an answer.{% if support_hours %} Hours: {{ support_hours }}.{% endif %}</p>
+  <p class="small"><strong>Contact <a href="mailto:{{ support_email or 'liz@helmmsp.ca' }}">{{ support_email or 'liz@helmmsp.ca' }}</a> or use the support chat.</strong> Click <strong>💬 Support</strong> at the bottom-right of any page{% if support_chat %} (or <a href="#" onclick="document.querySelector('#sc .sc-toggle').click();return false">open it now</a>){% endif %}, confirm your company name, your name and your email (the first time, and whenever you start a new chat), then type your question and press Enter. You can minimise the chat with × and keep working: the Support button shows a red number when there's an answer. When your question is answered, click <strong>End chat</strong> so we know it's finished.{% if support_hours %} Hours: {{ support_hours }}.{% endif %}</p>
 </section>
 
 <section class="panel stack help-card" id="problems">

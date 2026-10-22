@@ -5,8 +5,10 @@ Owner:   GET/POST /api/admin/support... (Bearer ADMIN_API_TOKEN), used by the Ad
 Alerts:  each new message from staff sends a free push notification to the owner's phone through ntfy
          (set NTFY_TOPIC; install the ntfy app and subscribe to the same topic).
 """
+import hashlib
 import hmac
 import os
+import re
 import threading
 import time
 import urllib.parse
@@ -28,7 +30,7 @@ CREATE TABLE IF NOT EXISTS support_threads (
   id INTEGER PRIMARY KEY,
   company_id INTEGER NOT NULL,
   user_id INTEGER NOT NULL,
-  status TEXT NOT NULL DEFAULT 'open',          -- open | resolved
+  status TEXT NOT NULL DEFAULT 'open',          -- open | resolved (by the owner) | ended (by the staff member)
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   unread_owner INTEGER NOT NULL DEFAULT 0,      -- messages from staff the owner hasn't read
@@ -38,7 +40,7 @@ CREATE TABLE IF NOT EXISTS support_threads (
 CREATE TABLE IF NOT EXISTS support_messages (
   id INTEGER PRIMARY KEY,
   thread_id INTEGER NOT NULL REFERENCES support_threads(id),
-  sender TEXT NOT NULL,                         -- user | owner
+  sender TEXT NOT NULL,                         -- user | owner | system (chat started / ended)
   author TEXT NOT NULL,
   body TEXT NOT NULL,
   page TEXT DEFAULT '',                         -- the page the staff member was on
@@ -48,8 +50,17 @@ CREATE INDEX IF NOT EXISTS ix_support_msgs ON support_messages(thread_id, id);
 """
 
 
+THREAD_COLUMNS = {"contact_company": "TEXT DEFAULT ''", "contact_name": "TEXT DEFAULT ''", "contact_email": "TEXT DEFAULT ''",
+                  "contact_confirmed_at": "TEXT", "ended_at": "TEXT", "ended_by": "TEXT DEFAULT ''"}
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$")
+
+
 def init_db(conn):
     conn.executescript(SCHEMA)
+    have = {r[1] for r in conn.execute("PRAGMA table_info(support_threads)")}
+    for col, spec in THREAD_COLUMNS.items():
+        if col not in have:
+            conn.execute(f"ALTER TABLE support_threads ADD COLUMN {col} {spec}")
 
 
 def utcnow():
@@ -83,6 +94,14 @@ def notify_owner(title, message, click="", reply=False):
 def register(A):
     app, db = A.app, A.db
     token = os.environ.get("ADMIN_API_TOKEN", "")
+    app_id = hashlib.sha256(token.encode()).hexdigest()[:12] if token else ""
+
+    def chat_link(tid):
+        """Where tapping a phone alert goes: that chat in the Admin Console (tid 0 = the test alert)."""
+        if not CONSOLE_URL:
+            return ""
+        ident = app_id or urllib.parse.urlsplit(getattr(A, "BASE_URL", "") or request.host_url).netloc or request.host
+        return f"{CONSOLE_URL}/support/go/{ident}/{tid}"
     recent = {}   # user id -> send times, to stop runaway messages
 
     def thread_for(user, company_id, create=False):
@@ -93,6 +112,19 @@ def register(A):
                          (company_id, user["id"], now, now))
             t = db().execute("SELECT * FROM support_threads WHERE company_id=? AND user_id=?", (company_id, user["id"])).fetchone()
         return t
+
+    def needs_intro(t):
+        """A new conversation starts with the person confirming their company, name and email."""
+        return (not t) or t["status"] in ("ended", "resolved") or not (t["contact_confirmed_at"] or "")
+
+    def intro_defaults(t):
+        return {"company": (t["contact_company"] if t and t["contact_company"] else g.company["name"]),
+                "name": (t["contact_name"] if t and t["contact_name"] else g.user["name"]),
+                "email": (t["contact_email"] if t and t["contact_email"] else g.user["email"])}
+
+    def system_note(tid, text, now):
+        db().execute("INSERT INTO support_messages (thread_id, sender, author, body, created_at) VALUES (?,?,?,?,?)",
+                     (tid, "system", "FormSign", text, now))
 
     def messages(tid, after=0):
         return [dict(r) for r in db().execute(
@@ -119,29 +151,74 @@ def register(A):
                 return jsonify({"error": "That's a lot of messages in a few minutes. Please wait a little."}), 429
             recent[g.user["id"]] = times + [time.time()]
             t = thread_for(g.user, cid, create=True)
+            if needs_intro(t):
+                return jsonify({"error": "Please confirm your details first.", "need_intro": True, "intro": intro_defaults(t)}), 409
             now = A.now()
             page = (request.form.get("page") or "")[:200]
             db().execute("INSERT INTO support_messages (thread_id, sender, author, body, page, created_at) VALUES (?,?,?,?,?,?)",
-                         (t["id"], "user", g.user["name"], body, page, now))
+                         (t["id"], "user", t["contact_name"] or g.user["name"], body, page, now))
             db().execute("UPDATE support_threads SET status='open', updated_at=?, unread_owner=unread_owner+1 WHERE id=?",
                          (now, t["id"]))
             db().commit()
-            company = g.company["name"]
-            click = ""
-            if CONSOLE_URL:   # tapping the alert (or Reply) opens this exact chat in the Admin Console
-                host = urllib.parse.urlsplit(getattr(A, "BASE_URL", "") or request.host_url).netloc or request.host
-                click = f"{CONSOLE_URL}/support/go/{host}/{t['id']}"
-            notify_owner(f"{company}: {g.user['name']}", body[:300], click, reply=bool(click))
+            company = t["contact_company"] or g.company["name"]
+            click = chat_link(t["id"])   # tapping the alert (or Reply) opens this exact chat in the Admin Console
+            notify_owner(f"{company}: {t['contact_name'] or g.user['name']}", body[:300], click, reply=bool(click))
         t = thread_for(g.user, cid)
         if not t:
-            return jsonify({"messages": [], "status": "new", "unread": 0, "hours": SUPPORT_HOURS})
+            return jsonify({"messages": [], "status": "new", "unread": 0, "hours": SUPPORT_HOURS,
+                            "need_intro": True, "intro": intro_defaults(None)})
         after = request.args.get("after", "0")
         msgs = messages(t["id"], int(after) if after.isdigit() else 0)
         if request.method == "GET" and t["unread_user"] and request.args.get("seen", "1") == "1":
             db().execute("UPDATE support_threads SET unread_user=0 WHERE id=?", (t["id"],))
             db().commit()
         return jsonify({"messages": msgs, "status": t["status"], "hours": SUPPORT_HOURS,
+                        "need_intro": needs_intro(t), "intro": intro_defaults(t),
                         "unread": 0 if request.args.get("seen", "1") == "1" else t["unread_user"]})
+
+    @app.route("/support/start.json", methods=["POST"])
+    @A.login_required
+    def support_start():
+        """Before a conversation starts: the person confirms their company, name and email."""
+        staff_only()
+        f = request.form
+        company, name = (f.get("company") or "").strip()[:120], (f.get("name") or "").strip()[:120]
+        email, confirm = (f.get("email") or "").strip()[:200], (f.get("email_confirm") or "").strip()[:200]
+        errors = {}
+        if not company:
+            errors["company"] = "Enter your company name."
+        if not name:
+            errors["name"] = "Enter your name."
+        if not EMAIL_RE.match(email):
+            errors["email"] = "Enter a valid email address."
+        elif email.lower() != confirm.lower():
+            errors["email_confirm"] = "The two email addresses don't match."
+        if errors:
+            return jsonify({"error": "Please check the highlighted boxes.", "errors": errors}), 400
+        t = thread_for(g.user, A.cid(), create=True)
+        now = A.now()
+        db().execute("UPDATE support_threads SET contact_company=?, contact_name=?, contact_email=?, contact_confirmed_at=?, "
+                     "status='open', ended_at=NULL, ended_by='', updated_at=? WHERE id=?",
+                     (company, name, email, now, now, t["id"]))
+        system_note(t["id"], f"Chat started by {name} ({company}, {email})", now)
+        db().commit()
+        return jsonify({"ok": True, "messages": messages(t["id"], int(f.get("after") or 0) if str(f.get("after") or "0").isdigit() else 0),
+                        "need_intro": False})
+
+    @app.route("/support/end.json", methods=["POST"])
+    @A.login_required
+    def support_end():
+        """The person closes the conversation: it's marked as finished for the owner too."""
+        staff_only()
+        t = thread_for(g.user, A.cid())
+        if not t or t["status"] == "ended":
+            return jsonify({"ok": True, "need_intro": True})
+        now, who = A.now(), (t["contact_name"] or g.user["name"])
+        db().execute("UPDATE support_threads SET status='ended', ended_at=?, ended_by=?, updated_at=?, "
+                     "unread_owner=unread_owner+1, unread_user=0 WHERE id=?", (now, who, now, t["id"]))
+        system_note(t["id"], f"{who} ended the chat", now)
+        db().commit()
+        return jsonify({"ok": True, "need_intro": True})
 
     @app.route("/support/unread.json")
     @A.login_required
@@ -180,7 +257,10 @@ def register(A):
                             (t["id"],)).fetchone()
         return {"id": t["id"], "company_id": t["company_id"], "company": t["company_name"], "user": t["user_name"],
                 "email": t["user_email"], "role": t["user_role"], "status": t["status"], "updated_at": t["updated_at"],
-                "unread": t["unread_owner"], "last": dict(last) if last else None}
+                "unread": t["unread_owner"], "last": dict(last) if last else None,
+                "contact": {"company": t["contact_company"] or "", "name": t["contact_name"] or "", "email": t["contact_email"] or "",
+                            "confirmed_at": t["contact_confirmed_at"]},
+                "ended_at": t["ended_at"], "ended_by": t["ended_by"] or ""}
 
     THREADS = ("SELECT t.*, c.name AS company_name, u.name AS user_name, u.email AS user_email, u.role AS user_role "
                "FROM support_threads t JOIN companies c ON c.id=t.company_id JOIN users u ON u.id=t.user_id")
@@ -190,13 +270,14 @@ def register(A):
     def admin_api_support():
         status = request.args.get("status", "")
         sql, args = THREADS, []
-        if status in ("open", "resolved"):
-            sql += " WHERE t.status=?"
-            args.append(status)
+        if status == "open":
+            sql += " WHERE t.status='open'"
+        elif status == "resolved":              # finished: resolved by the owner or ended by the staff member
+            sql += " WHERE t.status IN ('resolved', 'ended')"
         rows = db().execute(sql + " ORDER BY t.unread_owner > 0 DESC, t.updated_at DESC LIMIT 200", args).fetchall()
         unread = db().execute("SELECT COALESCE(SUM(unread_owner),0) FROM support_threads").fetchone()[0]
         return jsonify({"threads": [thread_json(r) for r in rows], "unread": unread,
-                        "alerts": bool(NTFY_TOPIC)})
+                        "alerts": bool(NTFY_TOPIC), "console_url": CONSOLE_URL, "app_id": app_id})
 
     @app.route("/api/admin/support/<int:tid>", methods=["GET", "POST"])
     @api
@@ -215,7 +296,7 @@ def register(A):
                              (tid, "owner", author, body, now))
                 db().execute("UPDATE support_threads SET updated_at=?, unread_user=unread_user+1, unread_owner=0 WHERE id=?",
                              (now, tid))
-            elif action in ("resolve", "reopen"):
+            elif action in ("resolve", "reopen"):   # reopening an ended chat is allowed too
                 db().execute("UPDATE support_threads SET status=?, unread_owner=0 WHERE id=?",
                              ("resolved" if action == "resolve" else "open", tid))
             else:
@@ -236,8 +317,11 @@ def register(A):
     def admin_api_support_test():
         if not NTFY_TOPIC:
             return jsonify({"error": "NTFY_TOPIC isn't set on this app."}), 400
-        notify_owner(f"{A.PLATFORM_NAME}: test alert", "Support chat alerts are working.",
-                     f"{CONSOLE_URL}/support" if CONSOLE_URL else "")
+        link = chat_link(0)
+        notify_owner(f"{A.PLATFORM_NAME}: test alert",
+                     "Support chat alerts are working. Tap this alert (or Reply) to check it opens your Admin Console."
+                     if link else "Support chat alerts are working. Add CONSOLE_URL to this app so tapping an alert opens the chat.",
+                     link, reply=bool(link))
         return jsonify({"ok": True, "message": "Test alert sent. It should reach your phone within a few seconds."})
 
     A.notify_owner = notify_owner

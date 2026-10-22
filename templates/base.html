@@ -64,9 +64,19 @@ b.querySelector('.announce-close').onclick=function(){b.hidden=true;try{localSto
 <div id="sc" class="sc" data-url="{{ url_for('support_chat') }}" data-unread-url="{{ url_for('support_unread') }}" data-me="{{ current_user.name }}">
   <button type="button" class="sc-toggle" aria-expanded="false" aria-controls="sc-panel">💬 Support{% if support_unread %}<span class="sc-badge">{{ support_unread }}</span>{% else %}<span class="sc-badge" hidden></span>{% endif %}</button>
   <section id="sc-panel" class="sc-panel" hidden aria-label="Support chat">
-    <header><div><strong>Support</strong><span class="small">{{ support_name or 'Helm MSP' }} · {{ support_hours }}</span></div><button type="button" class="sc-close" aria-label="Close">×</button></header>
+    <header><div><strong>Support</strong><span class="small">{{ support_name or 'Helm MSP' }} · {{ support_hours }}</span></div><div class="sc-head-btns"><button type="button" class="sc-end" hidden title="Finish this conversation">End chat</button><button type="button" class="sc-close" aria-label="Minimise the chat" title="Minimise (the chat stays open)">×</button></div></header>
+    <div class="sc-endbar" hidden role="alertdialog" aria-label="End this chat?"><span>End this chat? Support will see it's finished.</span><button type="button" class="btn btn-primary small sc-end-yes">End chat</button><button type="button" class="btn btn-quiet small sc-end-no">Keep chatting</button></div>
     <div class="sc-log" aria-live="polite"><p class="sc-hello">Hi {{ current_user.name.split(' ')[0] }}! Ask a question or tell us what went wrong, and we'll answer here. You can close this and keep working: the <strong>Support</strong> button shows when there's an answer.{% if support_email %} You can also email <a href="mailto:{{ support_email }}">{{ support_email }}</a>.{% endif %}</p></div>
-    <form class="sc-form"><textarea name="body" rows="2" maxlength="2000" placeholder="Type your message…" aria-label="Your message" required></textarea><button class="btn btn-primary">Send</button></form>
+    <form class="sc-intro" hidden novalidate>
+      <p class="sc-note" style="margin:0">Before we start, please confirm your details so we can reach you.</p>
+      <label>Company name<input name="company" type="text" maxlength="120" autocomplete="organization" required></label>
+      <label>Your name<input name="name" type="text" maxlength="120" autocomplete="name" required></label>
+      <label>Email address<input name="email" type="email" maxlength="200" autocomplete="email" required></label>
+      <label>Confirm email address<input name="email_confirm" type="email" maxlength="200" autocomplete="off" required></label>
+      <p class="sc-note sc-err sc-intro-err" hidden></p>
+      <button class="btn btn-primary">Start chat</button>
+    </form>
+    <form class="sc-form" hidden><textarea name="body" rows="2" maxlength="2000" placeholder="Type your message…" aria-label="Your message" required></textarea><button class="btn btn-primary">Send</button></form>
   </section>
 </div>
 <script src="{{ url_for('static', filename='support.js') }}"></script>
