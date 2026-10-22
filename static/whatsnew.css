@@ -1,0 +1,34 @@
+/* "What's new" button, side panel and important-note pop-up (see whatsnew.js). Uses the app's colour tokens. */
+.wn-btn { border: 0; background: none; font: inherit; color: var(--muted, #5b6475); padding: 6px 10px; border-radius: 6px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.wn-btn:hover, .wn-btn[aria-expanded=true] { color: var(--ink, #1d2433); background: var(--bg, #f6f7f9); }
+.wn-btn:focus-visible { outline: 2px solid var(--accent, #24408e); outline-offset: 2px; }
+.wn-spark { font-size: .95em; }
+.wn-badge { min-width: 19px; height: 19px; padding: 0 6px; border-radius: 999px; background: #d03b3b; color: #fff; font-size: .72rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; margin-left: 3px; line-height: 1; }
+.wn-badge[hidden] { display: none; }
+.wn-shade { position: fixed; inset: 0; background: rgba(15, 23, 42, .28); z-index: 60; }
+.wn-shade[hidden] { display: none; }
+.wn-panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(420px, 100vw); z-index: 61; background: var(--surface, #fff); color: var(--ink, #1d2433); border-left: 1px solid var(--rule, #dfe3ea); box-shadow: -14px 0 40px rgba(15, 23, 42, .18); display: flex; flex-direction: column; outline: none; padding-top: env(safe-area-inset-top, 0px); }
+.wn-panel[hidden] { display: none; }
+.wn-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; padding: 18px 20px 14px; border-bottom: 1px solid var(--rule, #dfe3ea); }
+.wn-head h2 { margin: 0; font-size: 1.3rem; }
+.wn-sub { display: block; color: var(--muted, #5b6475); font-size: .85rem; margin-top: 2px; }
+.wn-close, .wn-x { border: 0; background: none; font-size: 1.7rem; line-height: 1; cursor: pointer; color: var(--muted, #5b6475); padding: 0 4px; border-radius: 6px; }
+.wn-close:focus-visible, .wn-x:focus-visible, .wn-more:focus-visible { outline: 2px solid var(--accent, #24408e); outline-offset: 2px; }
+.wn-list { list-style: none; margin: 0; padding: 14px 16px 30px; overflow-y: auto; display: grid; gap: 12px; align-content: start; flex: 1; }
+.wn-note { border: 1px solid var(--rule, #dfe3ea); border-radius: 10px; padding: 12px 14px; background: var(--surface, #fff); overflow-wrap: anywhere; }
+.wn-note h3 { margin: 4px 0 6px; font-size: 1.02rem; }
+.wn-note p { margin: 0 0 8px; line-height: 1.5; font-size: .93rem; }
+.wn-note p:last-child { margin-bottom: 0; }
+.wn-unread { background: var(--accent-soft, #e8edf9); border-color: color-mix(in srgb, var(--accent, #24408e) 45%, transparent); box-shadow: inset 3px 0 0 var(--accent, #24408e); }
+.wn-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: .8rem; color: var(--muted, #5b6475); }
+.wn-pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 1px 8px; font-size: .72rem; font-weight: 700; letter-spacing: .02em; }
+.wn-pill-new { background: var(--accent, #24408e); color: var(--accent-ink, #fff); }
+.wn-pill-imp { background: #fab219; color: #2b1d00; }
+.wn-toast { position: fixed; z-index: 59; top: calc(70px + env(safe-area-inset-top, 0px)); right: 20px; width: min(360px, calc(100vw - 32px)); background: var(--surface, #fff); color: var(--ink, #1d2433); border: 1px solid var(--rule, #dfe3ea); border-left: 4px solid #fab219; border-radius: 10px; box-shadow: 0 12px 36px rgba(15, 23, 42, .22); padding: 12px 14px; display: grid; gap: 6px; animation: wn-in .25s ease-out; }
+.wn-toast-head { display: flex; justify-content: space-between; align-items: center; }
+.wn-toast p { margin: 0; font-size: .9rem; color: var(--muted, #5b6475); }
+.wn-more { justify-self: start; border: 1px solid var(--accent, #24408e); background: var(--accent, #24408e); color: var(--accent-ink, #fff); border-radius: 6px; padding: 5px 12px; font: inherit; font-size: .88rem; font-weight: 600; cursor: pointer; }
+@keyframes wn-in { from { transform: translateY(-8px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (max-width: 640px) { .wn-toast { right: 16px; left: 16px; width: auto; } }
+@media (prefers-reduced-motion: reduce) { .wn-toast { animation: none; } }
+@media print { .wn-btn, .wn-panel, .wn-shade, .wn-toast { display: none !important; } }

@@ -4,7 +4,11 @@
   const isPhone = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const isMac = /Macintosh|Mac OS X/.test(navigator.userAgent) && !isPhone;
   const canRich = !!(navigator.clipboard && navigator.clipboard.write && window.ClipboardItem);
-  const pasteKey = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘V' : 'Ctrl+V';
+  const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+  const pasteKey = mac ? '⌘V' : 'Ctrl+V';
+  const PASTE_TIP = '<strong>Your email is open.</strong> To make the link clickable: click in the message, press <kbd>' + (mac ? '⌘A' : 'Ctrl+A') +
+    '</kbd> then <kbd>' + pasteKey + '</kbd>. The message is replaced by the same one with a clickable button to the forms. Then press Send. <span style="opacity:.7">(Click to close)</span>';
+  window.FS_PASTE_TIP = PASTE_TIP;
 
   function toast(html, ms) {
     let t = document.getElementById('qs-toast');
@@ -63,6 +67,9 @@
       const done = () => { const t = a.textContent; a.textContent = 'Copied ✓'; setTimeout(() => (a.textContent = t), 1800); };
       copyRich(box).then(done, () => copyPlain(box.dataset.text).then(done, () => window.prompt('Copy this message:', box.dataset.text)));
     }
+    if (via === 'email') {   // the email opens with plain text; the clickable version is copied to swap in
+      copyRich(box).then(() => toast(PASTE_TIP, 60000), () => {});
+    }
     if (via === 'email' && a.dataset.app && box.dataset.setapp) {   // picked another email: remember it as the default
       const f2 = new FormData(); f2.append('csrf', csrf); f2.append('email_app', a.dataset.app); f2.append('quiet', '1');
       fetch(box.dataset.setapp, { method: 'POST', body: f2, keepalive: true });
@@ -78,17 +85,16 @@
     else fetch(box.dataset.nudge, { method: 'POST', body: fd, keepalive: true });
   });
 
-  // Arrived from "Create and open in Email": open the email right away (webmail was already opened in a new tab).
+  // Arrived from "Create and open in Email"
   const params = new URLSearchParams(location.search);
   const mode = params.get('compose');
   if (mode) {
     params.delete('compose');
     history.replaceState(null, '', location.pathname + (params.toString() ? '?' + params : '') + location.hash);
     const main = document.querySelector('#send-panel .quick-send a[data-main]');
-    if (main && mode === '1') {
-      if (main.getAttribute('href').startsWith('mailto:')) setTimeout(() => main.click(), 300);   // the email app opens
-      else { const w = window.open(main.href, '_blank'); if (w) { const b = document.getElementById('compose-banner-wait'); if (b) b.hidden = true; } }
-    }
-    if (main) { main.classList.add('qs-pulse'); }
+    if (main && mode === '1') setTimeout(() => main.click(), 300);   // no script on New packet: open it here (copying needs a click)
+    if (mode === 'done' && sessionStorage.getItem('fs-copied') === '1') toast(PASTE_TIP, 60000);
+    sessionStorage.removeItem('fs-copied');
+    if (main) main.classList.add('qs-pulse');
   }
 })();

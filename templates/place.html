@@ -1,8 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Place signature boxes{% endblock %}
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='jobfields.css') }}">
 <div class="page-head"><div><a href="{{ url_for('library') }}" class="small">← Form library</a><h1>Place signature boxes</h1>
-<p class="muted">{{ t.name }} · {{ pages|length }} page{{ 's' if pages|length != 1 }}. Put the signature, printed name and date exactly where they belong on the page. The signing record page is still added at the end.</p></div></div>
+<p class="muted">{{ t.name }} · {{ pages|length }} page{{ 's' if pages|length != 1 }}. Put the signature, printed name, date and initials exactly where they belong on the page, add job details that are printed when you send it, and choose pages the client must confirm they read. The signing record page is still added at the end.</p></div></div>
+{% set read = read_pages_of(t) %}
 <div class="place-layout">
   <aside class="panel place-tools stack" style="gap:10px">
     <h3>1. Who signs here?</h3>
@@ -13,20 +15,37 @@
     </div>
     <h3>2. Add a box</h3>
     <div>
-      {% for k, label in box_kinds.items() %}<button type="button" class="btn tool" data-kind="{{ k }}">+ {{ label }}</button>{% endfor %}
+      {% for k in ('signature', 'name', 'date', 'initials') %}<button type="button" class="btn tool" data-kind="{{ k }}">+ {{ box_kinds[k] }}</button>{% endfor %}
     </div>
-    <p class="muted small" id="place-help">Pick a box, then click on the page where it goes. Drag a box to move it; drag its corner to resize; × removes it.</p>
+    <h3>3. Job details <span class="hint">Optional</span></h3>
+    <div class="stack jf-tool" style="gap:6px">
+      <span class="muted small">Things like the job address or price. You fill them in on New packet and they're printed here.</span>
+      <label for="jd-label" class="small">What goes here?<input id="jd-label" type="text" maxlength="40" list="jd-suggest" placeholder="e.g. Job address" autocomplete="off"></label>
+      <datalist id="jd-suggest">{% for s in ('Job address', 'Price', 'Colour', 'Install date', 'Material', 'Edge profile', 'Deposit') %}<option value="{{ s }}">{% endfor %}{% for s in job_detail_builtins() %}<option value="{{ s }}">{% endfor %}</datalist>
+      <label for="jd-default" class="small">Default <span class="hint">Optional: used when left empty</span><input id="jd-default" type="text" maxlength="200" autocomplete="off"></label>
+      <button type="button" class="btn tool" data-kind="jobfield">+ Job detail</button>
+      <p class="small jf-editing" id="jd-editing" hidden>Editing the selected job detail box. <button type="button" class="linkish" id="jd-done">Done</button></p>
+      <span class="muted small">{{ job_detail_builtins()|join(', ') }} {{ 'are' if job_detail_builtins()|length > 1 else 'is' }} filled in from the packet automatically.</span>
+    </div>
+    <p class="muted small" id="place-help">Pick a box, then click on the page where it goes. Drag a box to move it; drag its corner to resize; × removes it. Click a job detail box to change its wording.</p>
+    <h3>4. Pages to confirm <span class="hint">Optional</span></h3>
+    <span class="muted small">Tick “Client must confirm they read this page” above a page. Before signing, each owner ticks a box for every one of those pages.</span>
     <form method="post" id="place-form" class="stack" style="gap:8px">
       <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-      <input type="hidden" name="placements_json" id="placements_json">
-      <button class="btn btn-primary">Save boxes</button>
+      <input type="hidden" name="placements_json" id="placements_json" value='{{ boxes|tojson }}'>
+      <button class="btn btn-primary">Save</button>
       <span class="muted small" id="box-count"></span>
     </form>
   </aside>
   <div id="pages">
-    {% for pg in pages %}
-    <div class="place-page {{ 'rotated' if pg.rotated }}" data-page="{{ loop.index0 }}" style="aspect-ratio: {{ pg.w }} / {{ pg.h }}">
-      <img src="{{ url_for('template_page', tid=t.id, n=loop.index0) }}" alt="Page {{ loop.index }}" loading="{{ 'eager' if loop.index0 < 2 else 'lazy' }}" draggable="false">
+    {% for pg in pages %}{% set n = loop.index0 %}
+    <div class="jf-pagebar">
+      <strong class="small">Page {{ loop.index }}</strong>
+      <label class="check small"><input type="checkbox" form="place-form" name="read_page" value="{{ n }}" {{ 'checked' if n in read }} class="jf-read"> Client must confirm they read this page</label>
+      <input type="text" form="place-form" name="read_title_{{ n }}" value="{{ read.get(n, '') }}" maxlength="80" placeholder="Page title (optional), e.g. Care and warranty" aria-label="Title of page {{ loop.index }}" class="jf-read-title" {{ '' if n in read else 'hidden' }}>
+    </div>
+    <div class="place-page {{ 'rotated' if pg.rotated }}" data-page="{{ n }}" style="aspect-ratio: {{ pg.w }} / {{ pg.h }}">
+      <img src="{{ url_for('template_page', tid=t.id, n=n) }}" alt="Page {{ loop.index }}" loading="{{ 'eager' if n < 2 else 'lazy' }}" draggable="false">
     </div>
     {% endfor %}
   </div>

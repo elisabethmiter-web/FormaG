@@ -161,6 +161,7 @@ def register(A):
                 "trial_days_left": extras.trial_days_left(c), "paused_reason": c.get("paused_reason") or "",
                 "grace_days_left": extras.grace_days_left(c),
                 "billing": billing_stats(c["id"]),
+                **(A.activity_stats(c["id"]) if hasattr(A, "activity_stats") else {}),
                 **stats(c["id"])}
 
     @app.route("/api/admin/summary")

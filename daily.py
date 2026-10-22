@@ -47,7 +47,7 @@ try:
 except ImportError:  # pragma: no cover
     ZoneInfo = None
 
-APP_VERSION = "2026.10.21-4"   # shown at the bottom of the Help page, to check which version is live
+APP_VERSION = "2026.10.21-10"   # shown at the bottom of the Help page, to check which version is live
 BACKUP_KEEP = max(1, int(os.environ.get("BACKUP_KEEP", "7")))
 RESTORE_FOLDERS = ("templates", "signed", "client_uploads", "brand", "seal")
 SUPPORT_NAME = os.environ.get("SUPPORT_NAME", "")
@@ -76,6 +76,12 @@ EMAIL_APPS = {
     "gmail": ("Gmail", "Gmail, or Google Workspace"),
     "outlookcom": ("Outlook.com", "Outlook.com, Hotmail or Live (personal)"),
 }
+
+
+def pretty_name(name):
+    """"North_Ridge_Installation_Report.pdf" -> "North Ridge Installation Report" for messages to clients."""
+    n = re.sub(r"\.(pdf|docx?|xlsx?|jpe?g|png|heic)$", "", (name or "").strip(), flags=re.I)
+    return re.sub(r"\s+", " ", n.replace("_", " ")).strip() or (name or "")
 
 
 def compose_url(kind, to, subject, body):
@@ -223,39 +229,64 @@ def register(A):
         forms = [r[0] for r in db().execute("SELECT template_name FROM packet_items WHERE packet_id=? AND requires_signature=1 "
                                             "ORDER BY position", (p["id"],))] or \
             [r[0] for r in db().execute("SELECT template_name FROM packet_items WHERE packet_id=? ORDER BY position", (p["id"],))]
+        forms = [pretty_name(f) for f in forms]
         business = A.biz()
         dl = A.deadline_info(p) if not reminder else {"due_at": None}
-        due_text = f"Please complete by {A.fmt_when(dl['due_at'])}." if dl.get("due_at") else ""
+        when = A.fmt_when(dl["due_at"]) if dl.get("due_at") else ""
+        due_text = f"Please complete by {when}." if when else ""
         sender = g.user["name"] if g.get("user") and g.user["id"] else business
+        signoff = [sender] if sender.strip().lower() == business.strip().lower() else [sender, business]
+        n = len(forms)
         if reminder:
             subject = f"Reminder: your forms from {business} are waiting for your signature"
             intro = f"Just a friendly reminder that {business} is still waiting for you to review and sign:"
         else:
-            subject = f"{business}: {len(forms)} form{'s' if len(forms) != 1 else ''} to sign"
+            subject = f"{business}: {n} form{'s' if n != 1 else ''} to sign"
             intro = f"{business} has sent you the following to review and sign:"
         if signer:
             intro += f" (you sign as the second owner, after {first_name(p['client_name'])})"
         code_text = "You'll be asked for an access code: we'll give it to you separately." if p["access_code"] else ""
+        hi, click, thanks = f"Hi {first_name(name)},", "Click here to open your forms", "Thank you,"
+        more = lambda k: f"and {k} more"  # noqa: E731
+        your_forms = "your forms"
         # the clickable text shown instead of the web address
-        if len(forms) <= 2:
-            link_text = f"{business} – " + " & ".join(forms) if forms else f"{business} – your forms"
+        if n <= 2:
+            link_text = f"{business} – " + " & ".join(forms) if forms else f"{business} – {your_forms}"
         else:
-            link_text = f"{business} – {forms[0]}, {forms[1]} and {len(forms) - 2} more"
-        body = (f"Hi {first_name(name)},\n\n{intro}\n" + "".join(f"  - {f}\n" for f in forms) +
-                f"\nClick here to open your forms ({link_text}):\n{link}\n" + (f"\n{due_text}\n" if due_text else "") +
-                (f"\n{code_text}\n" if code_text else "") + f"\nThank you,\n{sender}\n{business}\n")
+            link_text = f"{business} – {forms[0]}, {forms[1]} {more(n - 2)}"
+        body = (f"{hi}\n\n{intro}\n" + "".join(f"  - {f}\n" for f in forms) +
+                f"\n{click} ({link_text}):\n{link}\n" + (f"\n{due_text}\n" if due_text else "") +
+                (f"\n{code_text}\n" if code_text else "") + f"\n{thanks}\n" + "\n".join(signoff) + "\n")
         e = escape
+        button = (f'<a href="{e(link)}" style="display:inline-block;background:#1f3a8a;color:#ffffff;text-decoration:none;'
+                  f'font-weight:600;padding:10px 18px;border-radius:6px">{e(link_text)}</a>')
         html = (
             f'<div style="font-family:Segoe UI,Arial,sans-serif;font-size:15px;line-height:1.5;color:#1f2937">'
-            f"<p>Hi {e(first_name(name))},</p><p>{e(intro)}</p>"
+            f"<p>{e(hi)}</p><p>{e(intro)}</p>"
             f'<ul style="margin:0 0 14px 0">' + "".join(f"<li>{e(f)}</li>" for f in forms) + "</ul>"
-            f'<p><a href="{e(link)}" style="display:inline-block;background:#1f3a8a;color:#ffffff;text-decoration:none;'
-            f'font-weight:600;padding:10px 18px;border-radius:6px">{e(link_text)}</a></p>'
+            f"<p>{button}</p>"
             + (f"<p>{e(due_text)}</p>" if due_text else "") + (f"<p>{e(code_text)}</p>" if code_text else "")
-            + f"<p>Thank you,<br>{e(sender)}<br>{e(business)}</p></div>")
+            + f"<p>{e(thanks)}<br>" + "<br>".join(str(e(x)) for x in signoff) + "</p></div>")
         short = (f"{business}: Hi {first_name(name)}, "
                  + ("a reminder that your forms are waiting for your signature: " if reminder else
                     "please review and sign your forms here: ") + link + (" (access code given separately)" if p["access_code"] else ""))
+        # the company's own wording
+        c = db().execute("SELECT * FROM companies WHERE id=?", (p["company_id"],)).fetchone()
+        if c is not None:
+            c = dict(c)
+            vals = {"client": first_name(name), "client_full": name, "company": business, "sender": "\n".join(signoff),
+                    "forms": "\n".join(f"  - {f}" for f in forms), "due": due_text,
+                    "link": f"{click} ({link_text}):\n{link}" + (f"\n\n{code_text}" if code_text else "")}
+            hv = {"forms": '<ul style="margin:0">' + "".join(f"<li>{e(f)}</li>" for f in forms) + "</ul>",
+                  "link": button + (f"<br><br>{e(code_text)}" if code_text else ""),
+                  "sender": "<br>".join(str(e(x)) for x in signoff)}
+            own = A.everyday.render_wording(c, "reminder" if reminder else "first", vals, hv)
+            if own:
+                subject, body, html = own["subject"] or subject, own["body"], own["html"]
+            own_text = A.everyday.render_wording(c, "text", {**vals, "sender": sender, "forms": ", ".join(forms),
+                                                               "link": link + (" (access code given separately)" if p["access_code"] else "")})
+            if own_text:
+                short = own_text["body"].strip()
         q = urllib.parse.quote
         choice = email_app()
         return {"subject": subject, "body": body, "html": str(html), "link_text": link_text, "short": short,
@@ -270,6 +301,13 @@ def register(A):
                 "qr": url_for("text_qr", pid=p["id"], who=signer["id"] if signer else "", kind="reminder" if reminder else "send")}
 
     app.jinja_env.globals["quick_message"] = quick_message
+
+    def already_emailed(pid):
+        """True once the link has been sent from someone's email or phone, so the next message is a reminder."""
+        return bool(db().execute("SELECT 1 FROM events WHERE packet_id=? AND type IN ('sent','reminder') AND "
+                                 "detail LIKE '% via %' LIMIT 1", (pid,)).fetchone())
+
+    app.jinja_env.globals["already_emailed"] = already_emailed
 
     def email_app():
         """This person's choice of where emails open (default: the email app on their computer)."""
@@ -329,7 +367,7 @@ def register(A):
         db().execute("UPDATE packets SET last_nudge_at=? WHERE id=?", (A.now(), pid))
         A.log_event(pid, "sent", f"link for {p['client_name']} via staff member's email · by {A.actor()}")
         db().commit()
-        return jsonify({"url": qs["compose"], "web": qs["compose_web"]})
+        return jsonify({"url": qs["compose"], "web": qs["compose_web"], "html": qs["html"], "text": qs["body"]})
 
     @app.route("/account/email-app", methods=["POST"])
     @A.login_required
@@ -436,7 +474,7 @@ def register(A):
         after = request.args.get("after") or A.now()
         rows = updates_since(after, limit=10)
         return jsonify({"now": A.now(), "updates": [{"text": update_text(e), "url": url_for("packet_detail", pid=e["pid"]),
-                                                     "at": e["at"]} for e in rows]})
+                                                     "at": e["at"], "type": e["type"]} for e in rows]})
 
     app.jinja_env.globals["recent_updates"] = lambda: updates_since(last_seen())
 
@@ -459,8 +497,12 @@ def register(A):
         cond, args = A.packet_scope()
         nowdt = utcnow()
         out = []
+        snoozed = []
         for p in db().execute(f"SELECT * FROM packets WHERE {cond} AND completed_at IS NULL AND voided_at IS NULL "
                               f"AND sent_at IS NOT NULL", args).fetchall():
+            if "snooze_until" in p.keys() and p["snooze_until"] and (parse(p["snooze_until"]) or nowdt) > nowdt:
+                snoozed.append(p)
+                continue
             st = A.effective_status(p)
             if st not in ("sent", "viewed", "in_progress"):
                 continue
@@ -485,6 +527,7 @@ def register(A):
                 out.append({"p": p, "reasons": [r for r, _ in reasons], "rank": min(k for _, k in reasons),
                             "waiting": waiting, "contacted_today": contacted_today, "last_contact": last_contact})
         out.sort(key=lambda f: (f["contacted_today"], f["rank"], f["p"]["sent_at"] or ""))
+        g.snoozed_packets = sorted(snoozed, key=lambda p: p["snooze_until"])
         return [f for f in out if not f["contacted_today"]] + [f for f in out if f["contacted_today"]]
 
     @app.route("/follow-up")
@@ -492,7 +535,7 @@ def register(A):
     def follow_up():
         items = followups()
         return render_template("followup.html", items=items, due=[f for f in items if not f["contacted_today"]],
-                               done=[f for f in items if f["contacted_today"]])
+                               done=[f for f in items if f["contacted_today"]], snoozed=g.get("snoozed_packets") or [])
 
     # ------------------------------------------------ 5  download everything as one ZIP
     def zip_response(files, name):

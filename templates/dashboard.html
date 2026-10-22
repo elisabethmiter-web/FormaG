@@ -23,6 +23,24 @@
   {% else %}<p class="muted small" style="margin:4px 0 0">Nothing new. When a client opens, signs or sends files, it shows here.{% if followup_count %} <a href="{{ url_for('follow_up') }}">{{ followup_count }} packet{{ 's' if followup_count != 1 }} to follow up today →</a>{% endif %}</p>{% endif %}
 </section>
 
+<section class="insights" id="insights" hidden aria-label="Charts">
+  <div class="panel chart-card">
+    <div class="panel-head"><h2>Sent and signed, last 12 weeks</h2>
+      <div class="db-legend small"><span><i class="db-key db-s1"></i>Sent</span><span><i class="db-key db-s2"></i>Signed</span></div></div>
+    <div id="chart-weeks" class="db-chart"></div>
+    <p class="small muted" style="margin:6px 0 0">Click a week to see those packets.</p>
+  </div>
+  <div class="panel chart-card">
+    <div class="panel-head"><h2>Where packets are</h2></div>
+    <div id="chart-status" class="db-status"></div>
+    <p class="small muted" style="margin:6px 0 0">Click a row to filter the list. Overdue packets are also counted as awaiting or opened; archived ones aren't counted.</p>
+  </div>
+  <div class="db-kpis">
+    <div class="stat"><span class="eyebrow">Typical time to sign</span><strong id="kpi-median">—</strong><span class="muted small">median, from sent to fully signed</span></div>
+    <div class="stat"><span class="eyebrow">Signed within {{ sign_hours }} h</span><strong id="kpi-within">—</strong><span class="muted small" id="kpi-sub"></span></div>
+  </div>
+</section>
+
 <div class="stats">
   <div class="stat"><span class="eyebrow">Awaiting client</span><strong>{{ counts.awaiting }}</strong><span class="muted small">sent, not opened yet</span></div>
   <div class="stat"><span class="eyebrow">Opened, in progress</span><strong>{{ counts.viewed }}</strong><span class="muted small">client has the link open</span></div>
@@ -30,7 +48,7 @@
   <a class="stat stat-overdue {{ 'has' if counts.overdue }}" href="?show=overdue"><span class="eyebrow">Overdue</span><strong>{{ counts.overdue }}</strong><span class="muted small">not done within {{ sign_hours }} h</span></a>
 </div>
 
-<section class="panel">
+<section class="panel" id="board" data-edition="general" data-manager="{{ '1' if is_manager else '0' }}" data-json="{{ url_for('dashboard_json') }}" data-quick="{{ url_for('packet_quick', pid=0) }}" data-preview="{{ url_for('packet_preview', pid=0) }}" data-bulk="{{ url_for('packets_bulk') }}" data-export="{{ url_for('export_packets') }}">
   <form class="search-bar" method="get" role="search">
     <input type="hidden" name="show" value="{{ show }}">
     <label for="q" class="search-q"><span class="sr-only">Search</span>
@@ -49,9 +67,17 @@
       <a href="?show=awaiting{{ extra }}" class="{{ 'active' if show=='awaiting' }}">Awaiting client</a>
       <a href="?show=overdue{{ extra }}" class="{{ 'active' if show=='overdue' }} tab-overdue">Overdue{% if counts.overdue %} ({{ counts.overdue }}){% endif %}</a>
       <a href="?show=completed{{ extra }}" class="{{ 'active' if show=='completed' }}">Completed</a>
+      <a href="?show=archived{{ extra }}" class="{{ 'active' if show=='archived' }}">Archived</a>
     </div>
     {% if q or by_name %}<span class="muted small">{{ packets|length }} result{{ 's' if packets|length!=1 }}{% if q %} for “{{ q }}”{% endif %}{% if by_name %} · {{ by_name }}{% endif %}</span>{% endif %}
   </div>
+  {% if show in ('completed','archived') and not q %}
+  <form method="post" action="{{ url_for('archive_old') }}" class="row archive-old" style="gap:8px;align-items:center;margin:4px 0 12px">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <span class="small muted">{{ 'Archived packets are hidden from the other tabs; a search still finds them. Open one and use More ▾ to bring it back.' if show == 'archived' else 'Tidy up:' }}</span>
+    {% if show == 'completed' %}<button class="btn small" name="days" value="30">Archive signed and cancelled packets older than 30 days</button>{% endif %}
+  </form>
+  {% endif %}
   {% if packets %}
   <div class="table-wrap">
   <table>
@@ -89,3 +115,4 @@
   {% endif %}
 </section>
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='dashboard.js') }}" defer></script>{% endblock %}

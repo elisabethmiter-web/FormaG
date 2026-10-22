@@ -28,7 +28,8 @@ UPLOAD_MAX_BYTES = 25 * 1024 * 1024
 UPLOAD_MAX_FILES = 30
 UPLOAD_EXT = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif", ".pdf", ".doc", ".docx", ".xls",
               ".xlsx", ".csv", ".txt", ".dwg", ".dxf", ".rtf", ".odt", ".ods", ".mp4", ".mov"}
-BOX_KINDS = {"signature": "Signature", "name": "Printed name", "date": "Date"}
+BOX_KINDS = {"signature": "Signature", "name": "Printed name", "date": "Date", "initials": "Initials",
+             "jobfield": "Job detail"}   # job details and initials: see jobfields.py
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS packet_signers (
@@ -115,6 +116,11 @@ def clean_placements(raw, pages):
                 or not (0 <= box["x"] <= 1 and 0 <= box["y"] <= 1 and 0.005 <= box["w"] <= 1 and 0.005 <= box["h"] <= 1)
                 or box["x"] + box["w"] > 1.001 or box["y"] + box["h"] > 1.001):
             return None
+        if box["kind"] == "jobfield":   # a job detail printed when the packet is created
+            box["label"] = " ".join(str(b.get("label") or "").split())[:40]
+            box["default"] = " ".join(str(b.get("default") or "").split())[:200]
+            if not box["label"]:
+                return None
         out.append(box)
     return out
 
@@ -325,6 +331,8 @@ def register(A):
                     sig_bytes = None
             if not sig_bytes or len(sig_bytes) < 200 or len(sig_bytes) > 2_000_000:
                 errors["signature"] = "Draw or type your signature."
+            confirmed = {}
+            A.jobfields_sign_check(it, request.form, 2, confirmed, errors)   # read-this-page boxes and initials
             if not errors:
                 ts = A.now()
                 sig_name = f"cosig-{p['id']}-{iid}-{secrets.token_hex(4)}.png"
@@ -339,6 +347,7 @@ def register(A):
                         answers = json.loads(it["answers_json"] or "{}")
                     except ValueError:
                         answers = {}
+                    answers = A.jobfields_save_confirm(iid, answers, confirmed)
                     out_name, digest = A.render_item_pdf(p, it, answers, cosign_signers(p, it, s),
                                                          method=A.signing_method(p))
                     old = it["signed_pdf_path"]
@@ -640,9 +649,11 @@ def register(A):
             else:
                 boxes = [b for b in boxes if not pages[b["page"]]["rotated"]]
                 db().execute("UPDATE templates SET placements_json=? WHERE id=?", (json.dumps(boxes), tid))
+                read = A.jobfields_save_read_pages(tid, request.form, len(pages))
                 db().commit()
-                flash(f"Saved {len(boxes)} box{'es' if len(boxes) != 1 else ''} on “{t['name']}”. New packets with this form "
-                      f"show the signatures right on the page.", "ok")
+                flash(f"Saved {len(boxes)} box{'es' if len(boxes) != 1 else ''} on “{t['name']}”"
+                      + (f" and {len(read)} page{'s' if len(read) != 1 else ''} the client must confirm" if read else "")
+                      + ". New packets with this form show them right on the page.", "ok")
                 return redirect(url_for("library"))
         try:
             boxes = json.loads(t["placements_json"] or "[]")
@@ -682,6 +693,10 @@ def register(A):
             like = f"%{q.replace('%', '').replace('_', '')}%"
             sql += " AND (so_number LIKE ? OR sales_rep LIKE ? OR client_name LIKE ? OR client_email LIKE ?)"
             args += [like] * 4
+        ids = [int(x) for x in request.args.get("ids", "").split(",") if x.strip().isdigit()][:500]
+        if ids:   # "Export selected" on the dashboard
+            sql += f" AND id IN ({','.join('?' * len(ids))})"
+            args += ids
         rep = request.args.get("rep", "").strip()[:80]
         if rep:
             sql += " AND sales_rep = ?"

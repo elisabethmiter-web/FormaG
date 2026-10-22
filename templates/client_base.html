@@ -20,6 +20,7 @@
 {% include "_flash.html" %}
 {% block content %}{% endblock %}
 </main>
+{% if help_line and not kiosk %}<footer class="help-line">Questions? Contact {{ help_line.name or help_line.company }}{% if help_line.phone %} · <a href="tel:{{ help_line.tel }}">{{ help_line.phone }}</a>{% endif %}{% if help_line.email %} · <a href="mailto:{{ help_line.email }}">{{ help_line.email }}</a>{% endif %}</footer>{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -179,7 +179,7 @@ def page_png(pdf_path, n, out_png, scale=1.6):
             page.close()
         finally:
             doc.close()
-    tmp = out_png + ".tmp"
+    tmp = f"{out_png}.{os.getpid()}.{threading.get_ident()}.tmp"   # unique: two renders of the same page can run at once
     img.save(tmp, "PNG", optimize=True)
     os.replace(tmp, out_png)
     return out_png

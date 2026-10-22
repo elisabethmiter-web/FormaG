@@ -1,12 +1,116 @@
 {% extends "base.html" %}
 {% block title %}Team{% endblock %}
 {% block content %}
-<div class="page-head"><div><span class="eyebrow">Team</span><h1>Logins</h1>
-<p class="muted">Staff create, send and track their own packets and can use library forms. Management sees every packet from every user, can add, edit and remove library forms, and can add or remove logins here.</p></div></div>
+{% set stats = team_stats() %}
+<div class="page-head"><div><span class="eyebrow">Team</span><h1>Your team</h1>
+<p class="muted">Staff create, send and track their own packets and can use library forms. Management sees every packet, can change the library, and can add or remove people here. Click a name, email or access level to change it.</p></div>
+  <a class="btn btn-primary" href="#add-person">+ Add someone</a></div>
+
+{% if invite_shown %}
+<section class="panel invite-ready" id="invite-ready">
+  <h2>Invite link for {{ invite_shown.name }}</h2>
+  <p class="small muted" style="margin:0">Send this link to {{ invite_shown.name.split(' ')[0] }} ({{ invite_shown.email }}). It works once, for {{ 7 }} days: they choose their own password and they're in. Nobody else ever sees a password.</p>
+  <div class="linkbox"><input type="text" readonly value="{{ invite_shown.link }}" id="invite-link" aria-label="Invite link">
+    <button type="button" class="btn btn-primary" data-copy="#invite-link">Copy link</button>
+    <a class="btn" href="mailto:{{ invite_shown.email|urlencode }}?subject={{ ('Your ' ~ business_name ~ ' login')|urlencode }}&body={{ invite_shown.message|urlencode }}">✉ Email it</a></div>
+</section>
+{% endif %}
+
+<section class="team-cards" aria-label="Team activity this month">
+{% for u in users if u.active %}{% set s = stats[u.id] %}
+  <a class="team-card" href="{{ url_for('dashboard', by=u.id, show='all') }}" title="Show {{ u.name }}'s packets">
+    <span class="team-avatar" aria-hidden="true">{{ u.name[:1]|upper }}{{ (u.name.split(' ')[-1][:1]|upper) if ' ' in u.name else '' }}</span>
+    <span class="team-who"><strong>{{ u.name }}</strong><span class="muted small">{{ ROLE_LABELS[u.role] }}{% if s.invite_pending %} · invite not accepted yet{% endif %}</span></span>
+    <span class="team-nums">
+      <span><strong>{{ s.sent_month }}</strong><span class="muted small">sent this month</span></span>
+      <span><strong>{{ s.signed_month }}</strong><span class="muted small">signed</span></span>
+      <span class="{{ 'late' if s.overdue }}"><strong>{{ s.overdue }}</strong><span class="muted small">overdue</span></span>
+    </span>
+    <span class="team-spark" data-spark="{{ s.spark|join(',') }}" role="img" aria-label="Packets sent each week, last 8 weeks: {{ s.spark|join(', ') }}"></span>
+    <span class="muted small">Last seen {{ s.seen|when if s.seen else 'never' }}</span>
+  </a>
+{% endfor %}
+</section>
 
 <section class="panel">
-  <h2>Add a login</h2>
-  <form method="post" class="stack">
+  <div class="panel-head"><h2>Logins</h2><span class="muted small">{{ users|selectattr('active')|list|length }} active</span></div>
+  {% if users %}
+  <div class="table-wrap"><table class="team-table">
+    <thead><tr><th>Name and email</th><th>Access</th><th>Can sign in</th><th>Packets</th><th></th></tr></thead>
+    <tbody>
+    {% for u in users %}{% set s = stats[u.id] %}
+      <tr class="{{ 'muted' if not u.active }}" data-uid="{{ u.id }}" data-edit="{{ url_for('team_edit', uid=u.id) }}">
+        <td>
+          <div class="client-cell">
+            <span class="inline-edit" data-field="name" contenteditable="false" tabindex="0" role="button" aria-label="Name: {{ u.name }}. Press Enter to edit." title="Click to edit"><strong>{{ u.name }}</strong></span>{% if current_user.id == u.id %} <span class="muted small">(you)</span>{% endif %}
+            <span class="inline-edit small muted" data-field="email" tabindex="0" role="button" aria-label="Email: {{ u.email }}. Press Enter to edit." title="Click to edit">{{ u.email }}</span>
+            {% if u.must_change_password %}<span class="small" style="color:var(--warn)">{{ 'Invite sent, not accepted yet' if s.invite_pending else 'Temporary password, not changed yet' }}</span>{% endif %}
+          </div></td>
+        <td>
+          <form method="post" action="{{ url_for('team_update', uid=u.id) }}" class="row" style="gap:6px">
+            <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="role">
+            <select name="role" class="role-select" aria-label="Access for {{ u.name }}" style="width:auto">
+              {% for k, l in ROLE_LABELS.items() %}<option value="{{ k }}" {{ 'selected' if u.role==k }}>{{ l }}</option>{% endfor %}</select>
+            <noscript><button class="btn small">Save</button></noscript>
+          </form></td>
+        <td>
+          {% if current_user.id != u.id %}
+          <form method="post" action="{{ url_for('team_update', uid=u.id) }}" class="active-form">
+            <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="{{ 'deactivate' if u.active else 'activate' }}">
+            <label class="switch" title="{{ 'Can sign in' if u.active else 'Can\'t sign in' }}"><input type="checkbox" class="active-toggle" {{ 'checked' if u.active }} aria-label="{{ u.name }} can sign in"><span aria-hidden="true"></span></label>
+            <noscript><button class="btn btn-quiet small">{{ 'Deactivate' if u.active else 'Reactivate' }}</button></noscript>
+          </form>
+          {% else %}<span class="muted small">Yes (you)</span>{% endif %}
+        </td>
+        <td class="small nowrap">{{ s.open }} open · {{ s.total }} total</td>
+        <td>
+          <details class="more-menu"><summary class="btn btn-quiet small">More ▾</summary>
+            <div class="more-list team-more">
+              {% if u.must_change_password %}
+              <form method="post" action="{{ url_for('team_reinvite', uid=u.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button>New invite link</button></form>
+              {% else %}
+              <form method="post" action="{{ url_for('team_reinvite', uid=u.id) }}" onsubmit="return confirm('Send {{ u.name }} a link to choose a new password? Their current password stops working once they use it.')"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button>Reset password with a link</button></form>
+              {% endif %}
+              <details><summary class="more-sum">Set a temporary password instead</summary>
+                <form method="post" action="{{ url_for('team_update', uid=u.id) }}" class="row" style="gap:6px;padding:6px 12px">
+                  <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="password">
+                  <input type="text" name="password" placeholder="New temporary password" minlength="8" required aria-label="New temporary password" style="width:190px">
+                  <button class="btn small">Set</button></form></details>
+              {% if s.open and current_user.id != u.id or s.open and users|selectattr('active')|list|length > 1 %}
+              <form method="post" action="{{ url_for('team_reassign', uid=u.id) }}" class="stack" style="gap:6px;padding:6px 12px">
+                <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+                <label class="small">Move {{ s.open }} open packet{{ 's' if s.open != 1 }} to
+                  <select name="to" required><option value="">Choose…</option>{% for o in users if o.id != u.id and o.active %}<option value="{{ o.id }}">{{ o.name }}</option>{% endfor %}</select></label>
+                <button class="btn small">Move packets</button></form>
+              {% endif %}
+              {% if current_user.id != u.id %}
+              <details class="remove-user"><summary class="more-sum" style="color:var(--bad)">Remove login…</summary>
+                <form method="post" action="{{ url_for('team_update', uid=u.id) }}" class="stack remove-box" style="padding:6px 12px"
+                      onsubmit="return confirm('Remove this login for good? This cannot be undone.')">
+                  <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="remove">
+                  <p class="small" style="margin:0">Deletes this login. {% if u.packet_count %}Their {{ u.packet_count }} packet{{ 's' if u.packet_count != 1 }} stay{{ 's' if u.packet_count == 1 }} on file.{% else %}They have no packets.{% endif %}</p>
+                  {% if u.packet_count %}
+                  <label class="small" for="tr{{ u.id }}">Give their packets to
+                    <select id="tr{{ u.id }}" name="transfer_to"><option value="0">Management only</option>
+                    {% for o in users if o.id != u.id and o.active %}<option value="{{ o.id }}">{{ o.name }}</option>{% endfor %}</select></label>
+                  {% endif %}
+                  <button class="btn btn-danger small">Remove login</button>
+                </form></details>
+              {% endif %}
+            </div></details>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody></table></div>
+  {% else %}
+  <p class="muted">No team logins yet. Add your staff and managers below.</p>
+  {% endif %}
+  <p class="muted small">These logins only work for {{ business_name }}: no one outside your company can see your packets or forms. Keep at least two managers so someone can always reset passwords.</p>
+</section>
+
+<section class="panel" id="add-person">
+  <h2>Add someone</h2>
+  <form method="post" action="{{ url_for('team_invite') }}" class="stack" id="add-form">
     <input type="hidden" name="csrf" value="{{ csrf_token() }}">
     <div class="grid-2">
       <label for="name">Name<input id="name" type="text" name="name" value="{{ form.get('name','') }}" required></label>
@@ -14,61 +118,14 @@
       <label for="role">Access
         <select id="role" name="role"><option value="staff" {{ 'selected' if form.get('role','staff')=='staff' }}>Staff (own packets, no library changes)</option>
         <option value="manager" {{ 'selected' if form.get('role')=='manager' }}>Management (all packets, library and logins)</option></select></label>
-      <label for="password">Temporary password <span class="hint">At least 8 characters. They'll change it at first sign-in.</span><input id="password" type="text" name="password" autocomplete="off" minlength="8" required></label>
+      <fieldset class="how-fieldset"><legend class="small" style="font-weight:500">How they get in</legend>
+        <label class="check small"><input type="radio" name="how" value="invite" checked> <span><strong>Invite link</strong> (recommended): you send them a link, they choose their own password</span></label>
+        <label class="check small"><input type="radio" name="how" value="password"> <span>Temporary password: you choose it and tell them</span></label>
+        <label for="password" class="pw-field" hidden>Temporary password <span class="hint">At least 8 characters. They'll change it at first sign-in.</span><input id="password" type="text" name="password" autocomplete="off" minlength="8"></label>
+      </fieldset>
     </div>
-    <div><button class="btn btn-primary">Create login</button></div>
+    <div><button class="btn btn-primary" id="add-btn">Create invite link</button></div>
   </form>
 </section>
-
-<section class="panel">
-  <h2>Current logins</h2>
-  {% if users %}
-  <div class="table-wrap"><table>
-    <thead><tr><th>Name</th><th>Access</th><th>Status</th><th>Last sign-in</th><th></th></tr></thead>
-    <tbody>
-    {% for u in users %}
-      <tr class="{{ 'muted' if not u.active }}">
-        <td><div class="client-cell"><strong>{{ u.name }}{% if current_user.id == u.id %} <span class="muted small">(you)</span>{% endif %}</strong><span class="muted small">{{ u.email }}</span></div></td>
-        <td>
-          <form method="post" action="{{ url_for('team_update', uid=u.id) }}" class="row" style="gap:6px">
-            <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="role">
-            <select name="role" onchange="this.form.submit()" aria-label="Access for {{ u.name }}" style="width:auto">
-              {% for k, l in ROLE_LABELS.items() %}<option value="{{ k }}" {{ 'selected' if u.role==k }}>{{ l }}</option>{% endfor %}</select>
-          </form></td>
-        <td><span class="stamp {{ 's-completed' if u.active else 's-voided' }}">{{ 'Active' if u.active else 'Deactivated' }}</span>{% if u.active and u.must_change_password %}<div class="muted small">Temporary password</div>{% endif %}</td>
-        <td class="small muted">{{ u.last_login_at|when }}</td>
-        <td>
-          <div class="row" style="gap:6px;justify-content:flex-end">
-            <details><summary class="btn btn-quiet small">Reset password</summary>
-              <form method="post" action="{{ url_for('team_update', uid=u.id) }}" class="row" style="gap:6px;margin-top:6px">
-                <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="password">
-                <input type="text" name="password" placeholder="New temporary password" minlength="8" required aria-label="New temporary password" style="width:200px">
-                <button class="btn small">Set</button></form></details>
-            {% if current_user.id != u.id %}
-            <form method="post" action="{{ url_for('team_update', uid=u.id) }}">
-              <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="{{ 'deactivate' if u.active else 'activate' }}">
-              <button class="btn btn-quiet small {{ 'btn-danger' if u.active }}">{{ 'Deactivate' if u.active else 'Reactivate' }}</button></form>
-            <details class="remove-user"><summary class="btn btn-quiet small btn-danger">Remove</summary>
-              <form method="post" action="{{ url_for('team_update', uid=u.id) }}" class="stack remove-box"
-                    onsubmit="return confirm('Remove this login for good? This cannot be undone.')">
-                <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="remove">
-                <p class="small" style="margin:0">Deletes this login. {% if u.packet_count %}Their {{ u.packet_count }} packet{{ 's' if u.packet_count != 1 }} stay{{ 's' if u.packet_count == 1 }} on file.{% else %}They have no packets.{% endif %}</p>
-                {% if u.packet_count %}
-                <label class="small" for="tr{{ u.id }}">Give their packets to
-                  <select id="tr{{ u.id }}" name="transfer_to"><option value="0">Management only</option>
-                  {% for o in users if o.id != u.id and o.active %}<option value="{{ o.id }}">{{ o.name }}</option>{% endfor %}</select></label>
-                {% endif %}
-                <button class="btn btn-danger small">Remove login</button>
-              </form></details>
-            {% endif %}
-          </div>
-        </td>
-      </tr>
-    {% endfor %}
-    </tbody></table></div>
-  {% else %}
-  <p class="muted">No team logins yet. Add your staff and managers above.</p>
-  {% endif %}
-  <p class="muted small">These logins only work for {{ business_name }}: no one outside your company can see your packets or forms. Keep at least two managers so someone can always reset passwords.</p>
-</section>
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='team.js') }}" defer></script>{% endblock %}

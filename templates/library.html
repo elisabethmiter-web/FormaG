@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Form library{% endblock %}
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='library.css') }}">
 <div class="page-head">
   <div><span class="eyebrow">Form library</span><h1>Your forms</h1><p class="muted">Reusable forms you can add to any packet.{% if not is_manager %} View only: ask management to add or remove forms.{% endif %}</p></div>
   {% if is_manager %}<div class="row">
@@ -8,7 +9,7 @@
 </div>
 {% if is_manager %}
 
-<details class="panel" {{ 'open' if not templates }}>
+<details class="panel" id="upload-panel" {{ 'open' if not templates }}>
   <summary style="cursor:pointer"><h3 style="display:inline">Upload a file</h3> <span class="muted small">— PDF, Word, Excel, images or any other file you send often</span></summary>
   <form method="post" action="{{ url_for('upload_pdf') }}" enctype="multipart/form-data" class="stack" id="upload-form">
     <input type="hidden" name="csrf" value="{{ csrf_token() }}">
@@ -33,17 +34,27 @@
 {% if templates %}
 {% set bundles = bundles_for(current_company_id()) %}
 <section class="panel" id="bundles">
-  <div class="panel-head"><h2>Bundles</h2><span class="muted small">Sets of forms you send together, picked in one click on New packet</span></div>
+  <div class="panel-head"><h2>Bundles</h2><span class="muted small">Sets of forms you send together, picked in one click on New packet{% if is_manager %}. Forms go into the packet in the order shown{% endif %}</span></div>
   {% if bundles %}
   <div class="doc-list">
   {% for b in bundles %}
-    <div class="doc-row"><div class="doc-main"><strong>{{ b.name }}</strong><span class="small muted">{{ b.names|join(' · ') or 'No forms left in this bundle' }}</span></div>
+    <div class="doc-row" id="bundle-{{ b.id }}"><div class="doc-main"><strong>{{ b.name }}</strong>
+      {% if is_manager and b.ids|length > 1 %}
+      <ol class="lib-border" data-order-url="{{ url_for('bundle_order', bid=b.id) }}" aria-label="Order of the forms in {{ b.name }}">
+        {% for tid in b.ids %}<li class="lib-bitem" data-id="{{ tid }}">
+          <button type="button" class="lib-handle lib-js" hidden aria-label="Drag to reorder {{ b.names[loop.index0] }}" title="Drag to change the order">⠿</button>
+          <span class="lib-bname small">{{ b.names[loop.index0] }}</span>
+          <form method="post" action="{{ url_for('bundle_move', bid=b.id) }}" class="lib-moveform"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="tid" value="{{ tid }}">
+            <button class="lib-arrow" name="dir" value="up" aria-label="Move {{ b.names[loop.index0] }} up in {{ b.name }}" title="Move up" {{ 'disabled' if loop.first }}>↑</button><button class="lib-arrow" name="dir" value="down" aria-label="Move {{ b.names[loop.index0] }} down in {{ b.name }}" title="Move down" {{ 'disabled' if loop.last }}>↓</button></form>
+        </li>{% endfor %}
+      </ol><span class="lib-saved small muted" aria-live="polite"></span>
+      {% else %}<span class="small muted">{{ b.names|join(' · ') or 'No forms left in this bundle' }}</span>{% endif %}</div>
       <a class="btn" href="{{ url_for('new_packet', bundle=b.id) }}">Send</a>
       {% if is_manager %}<details class="bundle-edit"><summary class="btn btn-quiet">Edit</summary>
         <form method="post" action="{{ url_for('bundle_update', bid=b.id) }}" class="stack" style="gap:8px;margin-top:8px">
           <input type="hidden" name="csrf" value="{{ csrf_token() }}">
           <label>Name<input type="text" name="name" value="{{ b.name }}" maxlength="80" required></label>
-          <div class="stack" style="gap:4px">{% for t in templates %}<label class="check small"><input type="checkbox" name="template_ids" value="{{ t.id }}" {{ 'checked' if t.id in b.ids }}> {{ t.name }}</label>{% endfor %}</div>
+          <div class="stack lib-bchecks" style="gap:4px">{% for t in lp_bundle_templates(b, templates) %}<label class="check small" data-id="{{ t.id }}"><input type="checkbox" name="template_ids" value="{{ t.id }}" {{ 'checked' if t.id in b.ids }}> {{ t.name }}</label>{% endfor %}</div>
           <div class="row"><button class="btn btn-primary small" name="action" value="save">Save</button>
             <button class="btn btn-quiet btn-danger small" name="action" value="delete" formnovalidate>Remove bundle</button></div>
         </form></details>{% endif %}
@@ -56,21 +67,51 @@
     <form method="post" action="{{ url_for('bundle_create') }}" class="stack" style="gap:8px;margin-top:8px">
       <input type="hidden" name="csrf" value="{{ csrf_token() }}">
       <label>Bundle name<input type="text" name="name" maxlength="80" placeholder="e.g. Kitchen job" required></label>
-      <div class="stack" style="gap:4px"><span class="small muted">Forms in this bundle, in the order they're listed:</span>
+      <div class="stack" style="gap:4px"><span class="small muted">Forms in this bundle, in the order they're listed (change it afterwards with ↑ ↓):</span>
         {% for t in templates %}<label class="check small"><input type="checkbox" name="template_ids" value="{{ t.id }}"> {{ t.name }}</label>{% endfor %}</div>
       <div><button class="btn btn-primary">Save bundle</button></div>
     </form></details>
   {% endif %}
 </section>
 
-<div class="forms-grid">
+<section class="lib-forms" id="forms" aria-label="Forms">
+  <div class="lib-tools">
+    <form method="get" action="{{ url_for('library') }}#forms" role="search" class="lib-search" id="lib-search-form">
+      <label for="lib-search" class="sr-only">Search forms</label>
+      <input id="lib-search" type="search" name="q" value="{{ lp_q }}" placeholder="Search forms by name, description or tag" autocomplete="off">
+      {% for s in lp_selected %}<input type="hidden" name="tag" value="{{ s }}" class="lib-tag-param">{% endfor %}
+      <button class="btn lib-nojs">Search</button>
+    </form>
+    <div class="lib-tagbar" id="lib-tagbar" role="group" aria-label="Filter by tag" {{ 'hidden' if not lp_tags }}>
+      <span class="small muted">Tags:</span>
+      {% for tag, n in lp_tags %}<a class="lib-tagfilter{{ ' on' if tag.lower() in lp_selected_lower }}" href="{{ lp_tag_href(tag) }}" data-tag="{{ tag }}" role="button" aria-pressed="{{ 'true' if tag.lower() in lp_selected_lower else 'false' }}">{{ tag }} <span class="lib-n">{{ n }}</span></a>{% endfor %}
+    </div>
+    <div class="lib-statusrow">
+      <p class="small muted" id="lib-status" aria-live="polite">{% if lp_q or lp_selected %}Showing {{ lp_shown }} of {{ templates|length }} forms{% else %}{{ templates|length }} form{{ 's' if templates|length != 1 }}{% endif %}</p>
+      <a class="btn btn-quiet small" id="lib-clear" href="{{ url_for('library') }}#forms" {{ 'hidden' if not (lp_q or lp_selected) }}>Clear filters</a>
+      {% if is_manager and templates|length > 1 %}<p class="small muted lib-hint">Drag <span aria-hidden="true">⠿</span> or use ↑ ↓ (or Alt+↑/↓ on a form) to change the order. New packet and bundles use it. <span id="lib-saved" aria-live="polite"></span></p>{% endif %}
+    </div>
+  </div>
+  <div class="forms-grid" id="lib-grid" data-order-url="{{ url_for('library_order') }}" data-manager="{{ '1' if is_manager else '0' }}">
   {% for t in templates %}
-  <article class="form-card">
-    <span class="kind">{{ t.file_name|filetype if t.kind in ('pdf','file') and t.file_name else {'pdf':'PDF document','file':'File','form':'Fillable form'}[t.kind] }}{% if t.field_count %} · {{ t.field_count }} field{{ 's' if t.field_count!=1 }}{% endif %}</span>
+  <article class="form-card" id="form-{{ t.id }}" data-id="{{ t.id }}" data-name="{{ t.name }}" data-search="{{ t.search_text }}" data-tags='{{ t.tags|tojson }}' {{ 'hidden' if not t.lp_match }}>
+    <div class="lib-card-top">
+      <span class="kind">{{ t.file_name|filetype if t.kind in ('pdf','file') and t.file_name else {'pdf':'PDF document','file':'File','form':'Fillable form'}[t.kind] }}{% if t.field_count %} · {{ t.field_count }} field{{ 's' if t.field_count!=1 }}{% endif %}</span>
+      {% if is_manager %}<div class="lib-move">
+        <button type="button" class="lib-handle lib-js" hidden aria-label="Drag to reorder {{ t.name }}" title="Drag to change the order">⠿</button>
+        <form method="post" action="{{ url_for('library_move', tid=t.id) }}" class="lib-moveform"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <button class="lib-arrow" name="dir" value="up" aria-label="Move {{ t.name }} earlier" title="Move earlier" {{ 'disabled' if loop.first }}>↑</button><button class="lib-arrow" name="dir" value="down" aria-label="Move {{ t.name }} later" title="Move later" {{ 'disabled' if loop.last }}>↓</button></form>
+      </div>{% endif %}
+    </div>
     <h3>{{ t.name }}</h3>
+    <div class="lib-tags" {% if is_manager %}data-url="{{ url_for('library_tags', tid=t.id) }}"{% endif %}>{% for tag in t.tags %}<a class="chip lib-chip" href="{{ lp_tag_href(tag) }}" data-tag="{{ tag }}">{{ tag }}</a>{% endfor %}</div>
+    {% if is_manager %}<details class="lib-tagedit"><summary class="small">{{ 'Edit tags' if t.tags else 'Add tags' }}</summary>
+      <form method="post" action="{{ url_for('library_tags', tid=t.id) }}" class="row" style="gap:6px;margin-top:6px"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="set">
+        <input type="text" name="tags" value="{{ t.tags|join(', ') }}" placeholder="e.g. Kitchen, Deposit" aria-label="Tags for {{ t.name }}, separated by commas" list="lib-taglist" style="flex:1;min-width:140px"><button class="btn small">Save</button></form></details>{% endif %}
     <span class="muted small">Added {{ t.created_at|day }}</span>
     <div class="actions">
       <a class="btn" href="{{ url_for('new_packet', t=t.id) }}">Send</a>
+      <button type="button" class="btn btn-quiet lib-peek lib-js" hidden data-url="{{ url_for('library_preview', tid=t.id) }}" aria-haspopup="dialog">Quick look</button>
       {% if t.kind in ('pdf','file') %}<a class="btn btn-quiet" href="{{ url_for('template_file', tid=t.id) }}" target="_blank">{{ 'Preview' if t.kind=='pdf' else 'Download' }}</a>{% endif %}
       {% if is_manager %}
       <a class="btn btn-quiet" href="{{ url_for('edit_form', tid=t.id) }}">Edit</a>
@@ -81,11 +122,17 @@
     </div>
   </article>
   {% endfor %}
-</div>
+  </div>
+  <section class="panel empty" id="lib-none" {{ 'hidden' if lp_shown }}><h2>No forms match</h2><p class="muted">Try another word or fewer tags. <a href="{{ url_for('library') }}#forms" class="lib-clear-link">Show all forms</a></p></section>
+  <datalist id="lib-taglist">{% for tag, n in lp_tags %}<option value="{{ tag }}">{% endfor %}</datalist>
+</section>
+<div class="lib-backdrop" id="lib-backdrop" hidden></div>
+<aside class="db-drawer lib-drawer" id="lib-drawer" hidden role="dialog" aria-modal="true" aria-labelledby="lib-drawer-title" tabindex="-1"></aside>
 {% endif %}
 {% endblock %}
 {% block scripts %}
 {% if is_manager %}<script src="{{ url_for('static', filename='builder.js') }}"></script>
 <script>FormBuilder.mount(document.getElementById('builder'), document.getElementById('add-field'), document.getElementById('fields_json'), []);</script>{% endif %}
 <script src="{{ url_for('static', filename='confirm.js') }}"></script>
+<script src="{{ url_for('static', filename='library.js') }}"></script>
 {% endblock %}

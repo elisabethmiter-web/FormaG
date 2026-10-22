@@ -14,6 +14,14 @@
   {% if not form or form.kind=='form' %}
   <label for="body">Text shown above the fields <span class="hint">Instructions, terms, or the statement the client is agreeing to. Leave a blank line between paragraphs.</span>
     <textarea id="body" name="body" rows="6">{{ body }}</textarea></label>
+  <link rel="stylesheet" href="{{ url_for('static', filename='jobfields.css') }}">
+  <div class="stack" style="gap:6px">
+    <p class="muted small" style="margin:0"><strong>Job details:</strong> type a name in curly brackets, like {Job address} or {Install date}, and you fill it in on New packet; your client sees the text with it filled in. Add a default after an equals sign: {Colour=White}.{% if 'SO#' in job_detail_builtins() %} {SO#} and {Sales rep} come from the packet.{% endif %} {Client name} is the client's name.</p>
+    <div class="jf-chips" id="jf-chips" hidden><span class="small muted">Insert:</span>
+      {% for s in ['Job address', 'Price', 'Install date'] + job_detail_builtins() %}<button type="button" data-insert="{{ s }}">{{ '{' ~ s ~ '}' }}</button>{% endfor %}
+      <button type="button" data-other="1">Other…</button></div>
+    <p class="small jf-found" id="jf-found" style="margin:0" aria-live="polite"></p>
+  </div>
   {% else %}
   <input type="hidden" name="body" value="">
   <p class="muted small">PDF: <a href="{{ url_for('template_file', tid=form.id) }}" target="_blank">view the uploaded file</a>. To replace the PDF, upload a new form and remove this one.</p>
@@ -28,6 +36,7 @@
 {% endblock %}
 {% block scripts %}
 <script src="{{ url_for('static', filename='builder.js') }}"></script>
+<script src="{{ url_for('static', filename='jobfields.js') }}"></script>
 <script>
   const initial = JSON.parse(document.getElementById('fields_json').value || '[]');
   FormBuilder.mount(document.getElementById('builder'), document.getElementById('add-field'), document.getElementById('fields_json'),

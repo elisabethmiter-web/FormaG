@@ -9,6 +9,7 @@ A small web app for sending forms to clients for e-signature and getting confirm
 - **Send**: copy the link into your own email or message, or have the client sign right away on your device. The app doesn't send emails or texts.
 - **Track and confirm**: each packet shows Sent → Opened → In progress → Signed, with a timestamped activity log. When the client finishes, they see a confirmation number and download their signed copies; you see "Confirmed" on the packet and download the signed PDFs from it.
 - **Signed PDFs**: the original pages, stamped with a signing footer, plus a signature certificate page (signature, name, time, IP address, device, SHA-256 fingerprint of the original file). A per-packet audit trail PDF is one click away.
+- **Job details and read-this-page**: in a library PDF's box editor (“Place signature boxes”), add *Job detail* boxes (e.g. Job address, Price, Colour, with an optional default) and per-owner *Initials* boxes, and tick pages the client must confirm they read. In fillable forms, type {Job address} (or {Colour=White}) in the text. New packet asks for each job detail once; the values are printed on that packet's copy of the form. Before signing, each owner ticks every page to confirm and types their initials; the signed PDF shows the initials and the signing record lists the job details and the pages confirmed (with times). Job details can't be changed after the packet is created: make a new packet instead.
 
 Signatures are "simple electronic signatures" (drawn or typed, plus consent and an audit record). That's generally fine for engagement letters, intake and consent forms. For documents that legally need identity verification or a qualified signature, use a dedicated provider.
 
@@ -127,7 +128,27 @@ The client reads every document right above where they sign:
 - **Time zone per company**: managers pick their time zone on the Company page; every time in the app is shown in it.
 - **Check a signed PDF**: anyone can upload a signed PDF at `/verify` to see whether it matches the one signed here, with no certificate to buy. The signing record page explains the "identity unknown" message Adobe shows for the app's own seal, gives the verify address, and `/verify/certificate.cer` lets an office trust the seal in Acrobat if they want.
 - **Demo grace days**: when a demo ends, the company gets a red banner and keeps working for 3 more days (`DEMO_GRACE_DAYS`) before it locks, so nobody loses a client mid-signing.
+- **Interactive Packets dashboard** (`board.py`, `static/dashboard.js`): live updates every 20 seconds (with a pop-up when a client opens or signs), instant search, sortable columns, clickable charts (sent vs signed per week, where packets are, typical time to sign, signed within the target), row actions (Email, Copy link, Archive), a preview panel, and bulk actions (Remind one after another, Export to Excel, Archive with Undo). Without JavaScript the plain list still works.
+- **Team page** (`workspace.py`, `static/team.js`): activity cards per person (sent / signed / overdue this month, 8-week sparkline, last seen; click to filter the dashboard), invite links instead of temporary passwords (`/invite/<token>`, one use, 7 days), edit name/email/access in place, a sign-in switch with Undo, and moving someone's open packets to another person.
+- **Company page** (`static/company.js`): live preview of the signing page and of the email/reminder/text wording as you type, storage breakdown with the biggest files, and **Send a test to myself**.
+- **Follow-up page** (`static/followup.js`): progress for today, one-click call notes (fills the next follow-up), and snooze (tomorrow / 3 days / 1 week; `packets.snooze_until`).
+- **New packet** (`static/newpacket.js`): recent clients and bundles as one-click chips, steps (Client → Forms → Options → Send) and a live summary.
+- **Packet page**: a timeline with the time between each step, and live updates when the client opens, signs or sends files (`static/packet-live.js`).
+- **Account**: each person picks which desktop pop-ups they get (opened, signed, all signed, files, support answers).
+- **Form library** (`library_plus.py`): drag to reorder forms and bundle contents, Quick look preview, instant search, tags with filter chips.
+- **Help**: search box and guided tours ("Show me how") that highlight the real buttons, across pages (`static/tour.js`).
+- **Signing in**: every password box has **Show/Hide**, a **Caps Lock is on** warning, and a strength meter where a new password is chosen. **Stay signed in on this computer** at sign-in keeps the session for 31 days; unticked (shared computers), the session ends when the browser closes or after `IDLE_MINUTES` without activity (default 480 = 8 hours), with a one-minute warning.
+- **Duplicate a packet**: More ▾ on a packet → **Same forms, another client** or **Send again with changes** (same client). One-off files and approvals aren't copied.
+- **Edit client**: More ▾ → **Edit client's name or email** (also the second owner). Logged on the packet.
+- **Archive**: More ▾ → **Archive** hides a finished packet from the dashboard; the **Archived** tab and search still find it. The Completed tab has **Archive signed and cancelled packets older than 30 days**.
+- **Message wording** (Company page, managers): the company's own subject and message for new packets and reminders, and the text message, with `{client}`, `{company}`, `{forms}`, `{link}`, `{due}`, `{sender}`. English packets only.
+- **"Need help?" line** (Company page): phone and email shown at the bottom of every signing page; otherwise the sender's name and email.
+- **Finish later**: the client's answers are saved as they type (`form_drafts` table); **Save and finish later** lets them come back to the same link on any device. Signatures are never saved in drafts.
+- **Announcements**: the platform owner can show one message in every company's app and on the sign-in page (Admin Console → Announce).
 - **Support chat**: every page has a **💬 Support** button (company staff and managers). Messages go to the platform owner's **Support** inbox in the Admin Console, and the owner's phone gets a push alert (free, through the ntfy app: set `NTFY_TOPIC`). Answers appear in the same chat, and the button shows a red number when there's one. The Help page says to contact `SUPPORT_EMAIL` (liz@helmmsp.ca by default) or use the chat.
+- **Quick search** (`upkeep.py`): **Ctrl+K** / **⌘K** / **/** or the **Search** button opens one box for clients, packets, SO#, forms, team members and pages, with keyboard navigation. **New packet for…** opens New packet with the client filled in.
+- **Installable app**: `/manifest.webmanifest`, `/sw.js` and icons let staff install the app on a computer, Android or iPhone (Share → Add to Home Screen). The service worker only keeps a copy of the look-and-feel files and shows a "You're offline" page; it never stores packets or client data.
+- **Keeping and clearing old packets** (Company page, managers): archive finished packets after 3–24 months and/or delete them for good after 1–10 years (off by default; deleting needs a confirmation tick). A daily job applies the rules; the page lists what's due in the next 30 days, and `retention_log` keeps only the reference and dates of what was deleted. Shared library files are never removed.
 - **Help when stuck**: the sign-in page shows who to call (`SUPPORT_NAME`, `SUPPORT_PHONE`, `SUPPORT_EMAIL`), and the **Help** page has step-by-step answers for the common jobs, plus your video link (`HELP_VIDEO_URL`).
 
 ## Run it on your computer (5 minutes)
@@ -177,6 +198,7 @@ Any host that runs Docker works too (Railway, Fly.io, a VPS): build the `Dockerf
 | `BACKUP_S3_ENDPOINT` | no | Off-site backups: the S3 address, e.g. `https://s3.us-west-004.backblazeb2.com` (Backblaze B2) or `https://s3.ca-central-1.amazonaws.com` |
 | `BACKUP_S3_BUCKET` / `BACKUP_S3_REGION` | no | Bucket name and region (e.g. `us-west-004`, `ca-central-1`) |
 | `BACKUP_S3_KEY_ID` / `BACKUP_S3_SECRET` | no | The application key ID and secret for that bucket (write access is enough) |
+| `IDLE_MINUTES` | no | Sign-out after this many minutes without activity, when Stay signed in isn't ticked (default 480) |
 | `NTFY_TOPIC` | recommended | Support chat alerts: a long, hard-to-guess topic name (for example `helm-formsign-7f3k29xq`). Subscribe to the same topic in the ntfy app on your phone |
 | `CONSOLE_URL` | recommended | Your Admin Console's address; tapping a phone alert opens the Support inbox |
 | `SUPPORT_HOURS` | no | Shown in the chat (default "Monday to Friday, 9 am to 5 pm Eastern") |

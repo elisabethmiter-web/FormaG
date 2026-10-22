@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
 {% include "_head.html" %}
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#24408e">
+<link rel="stylesheet" href="{{ url_for('static', filename='whatsnew.css') }}">
 <meta name="csrf" content="{{ csrf_token() }}">
 <title>{% block title %}{% endblock %} · {{ business_name }}</title>
 </head>
@@ -46,6 +49,13 @@
   <span><strong>Demo: {{ trial_days_left }} day{{ 's' if trial_days_left != 1 }} left.</strong> The account locks on its own when the demo ends{% if support_email %}. To keep using {{ platform_name }}, contact <a href="mailto:{{ support_email }}">{{ support_email }}</a>{% endif %}. Nothing is deleted.</span>
 </div></div>
 {% endif %}
+{% if announcement and current_user %}
+<div class="alert-bar {{ 'alert-warn' if announcement.level == 'warn' else 'alert-info' }} announce" data-id="{{ announcement.id }}" hidden><div class="topbar-inner">
+  <span>📣 {{ announcement.text }}</span><button type="button" class="btn btn-quiet small announce-close" aria-label="Hide this message">Hide</button>
+</div></div>
+<script>(function(){var b=document.querySelector('.announce');if(!b)return;var k='fs-ann-'+b.dataset.id;try{if(localStorage.getItem(k))return;}catch(e){}b.hidden=false;
+b.querySelector('.announce-close').onclick=function(){b.hidden=true;try{localStorage.setItem(k,'1');}catch(e){}};})();</script>
+{% endif %}
 <main class="wrap {% block wrapclass %}{% endblock %}">
 {% include "_flash.html" %}
 {% block content %}{% endblock %}
@@ -61,7 +71,10 @@
 </div>
 <script src="{{ url_for('static', filename='support.js') }}"></script>
 {% endif %}
+{% if idle_seconds %}<span id="idle-cfg" hidden data-seconds="{{ idle_seconds }}" data-ping="{{ url_for('session_ping') }}" data-out="{{ url_for('signed_out_idle') }}"></span><script src="{{ url_for('static', filename='idle.js') }}"></script>{% endif %}
+{% if in_company %}<script src="{{ url_for('static', filename='palette.js') }}" defer></script><script src="{{ url_for('static', filename='whatsnew.js') }}" defer></script>{% endif %}
 {% block scripts %}{% endblock %}
-{% if in_company %}<script src="{{ url_for('static', filename='alerts.js') }}"></script>{% endif %}
+{% if in_company %}<script>window.FS_NOTIFY = {{ notify_prefs()|tojson }};</script><script src="{{ url_for('static', filename='alerts.js') }}"></script>{% endif %}
+{% if in_company %}<link rel="stylesheet" href="{{ url_for('static', filename='tour.css') }}"><script src="{{ url_for('static', filename='tour.js') }}" defer></script>{% endif %}
 </body>
 </html>

@@ -12,4 +12,14 @@
   <label for="confirm">Repeat new password<input id="confirm" type="password" name="confirm" autocomplete="new-password" minlength="8" required></label>
   <div><button class="btn btn-primary">Save password</button></div>
 </form>
+{% if current_user.id %}
+<form method="post" action="{{ url_for('account_notifications') }}" class="panel stack" id="notifications" style="max-width:460px">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <h2>Desktop pop-ups</h2>
+  <p class="muted small" style="margin:0">While {{ platform_name }} is open in a tab, a pop-up appears for the things you tick. Turn pop-ups on with <strong>Turn on desktop alerts</strong> on the Packets page.</p>
+  {% set np = notify_prefs() %}
+  {% for k, label in NOTIFY_KINDS.items() %}<label class="check"><input type="checkbox" name="{{ k }}" {{ 'checked' if np[k] }}> <span>{{ label }}</span></label>{% endfor %}
+  <div><button class="btn btn-primary">Save pop-up choices</button></div>
+</form>
+{% endif %}
 {% endblock %}

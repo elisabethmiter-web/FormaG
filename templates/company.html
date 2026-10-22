@@ -2,30 +2,62 @@
 {% block title %}Company{% endblock %}
 {% block content %}
 <div class="page-head"><div><span class="eyebrow">Company</span><h1>{{ c.name }}</h1>
-<p class="muted">{{ users }} active login{{ 's' if users != 1 }}. Everything in this account (forms, packets, signed copies and logins) is visible only to {{ c.name }}.</p></div></div>
+<p class="muted">{{ users }} active login{{ 's' if users != 1 }}. Everything in this account (forms, packets, signed copies and logins) is visible only to {{ c.name }}. The preview on the right shows what your clients see as you make changes.</p></div>
+  <form method="post" action="{{ url_for('company_test_packet') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <button class="btn" title="Makes a real packet addressed to you, so you can go through it exactly like a client">✉ Send a test to myself</button></form></div>
 
-<div class="grid-2" style="align-items:start">
-<form method="post" class="panel stack">
+<div class="co-layout">
+<div class="stack" style="gap:20px">
+
+<form method="post" class="panel stack" id="details">
   <input type="hidden" name="csrf" value="{{ csrf_token() }}">
   <h2>Details</h2>
   <label for="name">Company name <span class="hint">Shown to clients on signing pages and signed PDFs</span>
-    <input id="name" type="text" name="name" value="{{ c.name }}" maxlength="100" required></label>
+    <input id="name" type="text" name="name" value="{{ c.name }}" maxlength="100" required data-pv="company"></label>
   <div><button class="btn btn-primary">Save</button></div>
 </form>
 
-<section class="panel stack">
-  <h2>Storage</h2>
-  {% set pct = (used / limit * 100) if limit else 0 %}
-  <p style="margin:0"><strong>{{ used|gb }}</strong> <span class="muted">used of {{ c.storage_gb }} GB included</span></p>
-  <div class="meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ pct|round|int }}" aria-label="Storage used">
-    <span style="width:{{ [pct, 100]|min }}%" class="{{ 'meter-full' if pct >= 90 }}"></span></div>
-  {% if pct >= 100 %}<p class="small" style="color:var(--late);margin:0">You've used all your included storage. Contact {{ platform_name }} to add more.</p>
-  {% elif pct >= 90 %}<p class="small" style="color:var(--late);margin:0">You're close to your included storage.</p>{% endif %}
-  <p class="muted small" style="margin:0">Counts your library files, files sent to clients and signed copies.</p>
-</section>
-</div>
+<form method="post" action="{{ url_for('company_brand') }}" class="panel stack" id="brand" enctype="multipart/form-data">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <h2>Logo and colour</h2>
+  <p class="muted small" style="margin:0">Your clients see these on the signing pages. Changes show in the preview right away; click Save to keep them.</p>
+  <label for="logo">Logo <span class="hint">PNG or JPG, up to 5 MB. A wide logo on a transparent or white background looks best.</span>
+    <input id="logo" type="file" name="logo" accept="image/png,image/jpeg,image/webp"></label>
+  {% if c.logo_file %}<label class="check"><input type="checkbox" name="remove_logo" value="1" id="remove_logo"> Remove the logo (show the company name instead)</label>{% endif %}
+  <label for="brand_color">Button and link colour
+    <span class="row" style="gap:8px;align-items:center"><input id="brand_color" type="color" name="brand_color" value="{{ c.brand_color or '#24408e' }}" style="width:64px;height:40px;padding:2px">
+    {% if c.brand_color %}<label class="check small"><input type="checkbox" name="reset_color" value="1" id="reset_color"> Use the standard blue</label>{% endif %}</span></label>
+  <div><button class="btn btn-primary">Save branding</button></div>
+</form>
 
-<div class="grid-2" style="align-items:start;margin-top:20px">
+<form method="post" action="{{ url_for('company_contact') }}" class="panel stack" id="contact">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <h2>"Need help?" line for your clients</h2>
+  <p class="muted small" style="margin:0">Shown at the bottom of every signing page, so clients with a question contact you (not us). Leave it empty to show the name and email of the person who sent the packet.</p>
+  <label>Contact name <span class="hint">e.g. Office, or a person</span><input type="text" name="contact_name" value="{{ c.contact_name or '' }}" maxlength="80" placeholder="Office"></label>
+  <label>Phone<input name="contact_phone" type="tel" value="{{ c.contact_phone or '' }}" maxlength="40" placeholder="705-555-0142"></label>
+  <label>Email<input name="contact_email" type="email" value="{{ c.contact_email or '' }}" maxlength="200" placeholder="office@yourcompany.ca"></label>
+  <div><button class="btn btn-primary">Save contact line</button></div>
+</form>
+
+<section class="panel stack" id="messages">
+  <h2>Message wording</h2>
+  <p class="muted small" style="margin:0">The text that's written in when your team clicks <strong>Open in Email</strong>, <strong>Copy message</strong> or <strong>Text from my phone</strong>. Click a code to add it where your cursor is; it's replaced with the real details (see the preview).</p>
+  <p class="small ph-list" style="margin:0">{% for k, v in placeholders.items() %}<code data-ph="{{ k }}" title="{{ v }}">{{ k }}</code> {{ v }}{{ ' · ' if not loop.last }}{% endfor %}</p>
+  <form method="post" action="{{ url_for('company_messages') }}" class="msg-grid">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <label>New packet: subject<input name="msg_subject" value="{{ c.msg_subject or wording_defaults.msg_subject }}" maxlength="200" data-pvmail="first"></label>
+    <label>New packet: message<textarea name="msg_body" rows="8" data-pvmail="first">{{ c.msg_body or wording_defaults.msg_body }}</textarea></label>
+    <label>Reminder: subject<input name="msg_rem_subject" value="{{ c.msg_rem_subject or wording_defaults.msg_rem_subject }}" maxlength="200" data-pvmail="reminder"></label>
+    <label>Reminder: message<textarea name="msg_rem_body" rows="7" data-pvmail="reminder">{{ c.msg_rem_body or wording_defaults.msg_rem_body }}</textarea></label>
+    <label>Text message<textarea name="msg_text" rows="3" data-pvmail="text">{{ c.msg_text or wording_defaults.msg_text }}</textarea></label>
+    <p class="small muted" style="margin:0">If you leave out <code>{link}</code>, the link is added at the end.</p>
+    <div class="row"><button class="btn btn-primary">Save wording</button>
+      <button class="btn btn-quiet" name="reset" value="1" onclick="return confirm('Go back to the standard wording?')">Use the standard wording</button></div>
+  </form>
+</section>
+
+<div class="grid-2" style="align-items:start">
 <form method="post" action="{{ url_for('company_timezone') }}" class="panel stack" id="timezone">
   <input type="hidden" name="csrf" value="{{ csrf_token() }}">
   <h2>Time zone</h2>
@@ -33,23 +65,96 @@
   <label for="tz">Time zone<select id="tz" name="timezone">{% for tzv, label in timezones %}<option value="{{ tzv }}" {{ 'selected' if (c.timezone or 'America/Toronto') == tzv }}>{{ label }}</option>{% endfor %}</select></label>
   <div><button class="btn btn-primary">Save time zone</button></div>
 </form>
-<form method="post" action="{{ url_for('company_brand') }}" class="panel stack" id="brand" enctype="multipart/form-data">
+
+{% set sb = storage_breakdown(c.id) %}
+<section class="panel stack" id="storage">
+  <h2>Storage</h2>
+  {% set pct = (used / limit * 100) if limit else 0 %}
+  <p style="margin:0"><strong>{{ used|gb }}</strong> <span class="muted">used of {{ c.storage_gb }} GB included</span></p>
+  <div class="meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ pct|round|int }}" aria-label="Storage used">
+    <span style="width:{{ [pct, 100]|min }}%" class="{{ 'meter-full' if pct >= 90 }}"></span></div>
+  {% if pct >= 100 %}<p class="small" style="color:var(--late);margin:0">You've used all your included storage. Contact {{ platform_name }} to add more.</p>
+  {% elif pct >= 90 %}<p class="small" style="color:var(--late);margin:0">You're close to your included storage.</p>{% endif %}
+  {% if sb.total %}
+  <div class="stor-bar" role="img" aria-label="What uses the space">{% for k in sb.cats if k.bytes %}<span class="c-{{ {'library':'lib','sent':'sent','signed':'signed','client':'client','brand':'brand'}[k.key] }}" style="flex:{{ k.bytes }}" title="{{ k.label }}: {{ k.bytes|gb }}"></span>{% endfor %}</div>
+  <div class="stor-legend">{% for k in sb.cats %}<div><i class="c-{{ {'library':'lib','sent':'sent','signed':'signed','client':'client','brand':'brand'}[k.key] }}"></i>{{ k.label }}<b>{{ k.bytes|gb }}</b></div>{% endfor %}</div>
+  <details><summary class="small" style="cursor:pointer">Biggest files</summary>
+    <ul class="big-files" style="margin-top:8px">{% for f in sb.biggest %}<li><a href="{{ f.link }}" title="{{ f.label }}">{{ f.label }}</a><span class="muted small nowrap">{{ f.size|gb }}</span></li>{% endfor %}</ul>
+  </details>
+  {% else %}<p class="muted small" style="margin:0">Counts your library files, files sent to clients, signed copies and files from clients.</p>{% endif %}
+</section>
+</div>
+
+{% set rt = retention_info(c.id) %}
+<form method="post" action="{{ url_for('company_retention') }}" class="panel stack" id="retention">
   <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-  <h2>Logo and colour</h2>
-  <p class="muted small" style="margin:0">Your clients see these on the signing pages.</p>
-  {% set b = brand %}
-  <div class="brand-preview" style="{% if b.color %}--accent:{{ b.color }};--accent-ink:{{ b.ink }}{% endif %}">
-    {% if b.logo_url %}<img src="{{ b.logo_url }}" alt="Your logo">{% else %}<strong>{{ c.name }}</strong>{% endif %}
-    <span class="btn btn-primary small" aria-hidden="true">Review and sign</span>
+  <div class="panel-head"><h2>Keeping and clearing old packets</h2>
+    <span class="small {{ 'ret-on' if rt.years else 'muted' }}">{% if rt.years %}Deleting after {{ rt.years }} year{{ 's' if rt.years != 1 }}{% else %}Nothing is deleted automatically{% endif %}</span></div>
+  <p class="muted small" style="margin:0">Applies to finished packets (signed or cancelled), counted from the day they finished. Open packets are never touched. The rules run once a day. Check how long your industry or insurer needs you to keep signed paperwork before turning on deleting.</p>
+  <div class="grid-2">
+    <label for="archive_months">Move to Archived after
+      <select id="archive_months" name="archive_months">{% for m in rt.archive_choices %}<option value="{{ m }}" {{ 'selected' if rt.months == m }}>{{ 'Never (archive by hand)' if not m else m ~ ' months' }}</option>{% endfor %}</select>
+      <span class="hint">Archived packets are hidden from the main list but kept, and can be found and brought back any time.</span></label>
+    <label for="delete_years">Delete for good after
+      <select id="delete_years" name="delete_years" data-current="{{ rt.years }}">{% for y in rt.delete_choices %}<option value="{{ y }}" {{ 'selected' if rt.years == y }}>{{ 'Never (keep everything)' if not y else y ~ (' year' if y == 1 else ' years') }}</option>{% endfor %}</select>
+      <span class="hint">Removes the packet, its signed PDFs, signatures and files from clients. Library forms are kept.</span></label>
   </div>
-  <label for="logo">Logo <span class="hint">PNG or JPG, up to 5 MB. A wide logo on a transparent or white background looks best.</span>
-    <input id="logo" type="file" name="logo" accept="image/png,image/jpeg,image/webp"></label>
-  {% if c.logo_file %}<label class="check"><input type="checkbox" name="remove_logo" value="1"> Remove the logo (show the company name instead)</label>{% endif %}
-  <label for="brand_color">Button and link colour
-    <span class="row" style="gap:8px;align-items:center"><input id="brand_color" type="color" name="brand_color" value="{{ c.brand_color or '#24408e' }}" style="width:64px;height:40px;padding:2px">
-    {% if c.brand_color %}<label class="check small"><input type="checkbox" name="reset_color" value="1"> Use the standard blue</label>{% endif %}</span></label>
-  <div><button class="btn btn-primary">Save branding</button></div>
+  <label class="check ret-understand" id="ret-understand" {{ 'hidden' if not rt.years }}><input type="checkbox" name="understand" id="understand">
+    <span>I understand deleted packets and their signed copies <strong>can't be recovered</strong>, by us or by {{ platform_name }}. Download anything you need to keep first.</span></label>
+  <div class="row" style="gap:10px;align-items:center"><button class="btn btn-primary">Save rules</button>
+    {% if rt.set_at %}<span class="muted small">Last changed {{ rt.set_at|when }}{% if rt.set_by %} by {{ rt.set_by }}{% endif %}</span>{% endif %}</div>
+  {% if rt.years %}
+  <div class="stack" style="gap:6px">
+    <h3 class="small" style="margin:0">Due to be deleted in the next 30 days{% if rt.soon %} ({{ rt.soon|length }}{{ '+' if rt.soon|length >= 50 }}){% endif %}</h3>
+    {% if rt.soon %}
+    <ul class="ret-list">{% for s in rt.soon %}<li><a href="{{ s.url }}">{{ s.client }}</a> <span class="muted small">{{ s.ref }}</span><span class="small nowrap">{{ s.when|day }}</span></li>{% endfor %}</ul>
+    <p class="muted small" style="margin:0">To keep one, open it and download the signed copy before that date.</p>
+    {% else %}<p class="muted small" style="margin:0">None.</p>{% endif %}
+  </div>
+  {% endif %}
+  {% if rt.log %}
+  <details><summary class="small" style="cursor:pointer">Deletion record ({{ rt.log_total }} packet{{ 's' if rt.log_total != 1 }} deleted so far)</summary>
+    <p class="muted small" style="margin:8px 0 4px">Only the reference and dates are kept, never client names or forms.</p>
+    <div class="table-wrap"><table class="small"><thead><tr><th>Reference</th><th>Finished</th><th>Deleted</th><th>Forms</th><th>Rule</th></tr></thead><tbody>
+    {% for r in rt.log %}<tr><td class="nowrap">{{ r.ref }}</td><td class="nowrap">{{ r.finished_at|day if r.finished_at else '' }}</td><td class="nowrap">{{ r.deleted_at|day }}</td><td>{{ r.forms }}</td><td class="nowrap">{{ r.rule }}</td></tr>{% endfor %}
+    </tbody></table></div></details>
+  {% endif %}
 </form>
+<script>
+(function(){ const s=document.getElementById('delete_years'), u=document.getElementById('ret-understand'); if(!s||!u) return;
+  const f=()=>{ const v=+s.value, cur=+s.dataset.current; u.hidden = !v; const box=document.getElementById('understand'); if(box) box.required = !!v && v !== cur; };
+  s.addEventListener('change', f); f(); })();
+</script>
 
 </div>
+
+<aside class="co-preview" aria-label="Preview of what clients see" data-sender="{{ current_user.name if current_user and current_user.id else c.name }}"
+       data-forms="{{ (library_names(2) or ['Deposit Terms', 'Service Agreement'])|join('|') }}">
+  <section class="panel stack" style="gap:10px">
+    <div class="panel-head"><h2>Client's signing page</h2><span class="muted small">preview</span></div>
+    <div class="pv-client">
+      <div class="pv-top" id="pv-top">{% if brand.logo_url %}<img src="{{ brand.logo_url }}" alt="" id="pv-logo"><strong id="pv-name" hidden>{{ c.name }}</strong>{% else %}<img alt="" id="pv-logo" hidden><strong id="pv-name">{{ c.name }}</strong>{% endif %}</div>
+      <div class="pv-body"><span class="eyebrow">For Sam Lee</span><strong id="pv-title">{{ c.name }} has sent you 2 items to sign</strong>
+        <span class="pv-btn" id="pv-btn" style="{% if c.brand_color %}background:{{ c.brand_color }};color:{{ brand.ink }}{% endif %}">Start signing</span></div>
+      <div class="pv-help" id="pv-help"></div>
+    </div>
+  </section>
+  <section class="panel stack" style="gap:10px">
+    <div class="panel-head"><h2>Message preview</h2>
+      <div class="tabs" role="tablist"><a href="#" data-pvtab="first" class="active">Email</a><a href="#" data-pvtab="reminder">Reminder</a><a href="#" data-pvtab="text">Text</a></div></div>
+    <div class="pv-mail" id="pv-mail" aria-live="polite"></div>
+    <p class="small muted" style="margin:0">With a sample client, Sam Lee. Unsaved changes show here too.</p>
+  </section>
+</aside>
+</div>
+<script>
+(function(){ let last=null;
+  document.querySelectorAll('#messages input, #messages textarea').forEach(el=>el.addEventListener('focus',()=>{ last=el; }));
+  document.querySelectorAll('#messages code[data-ph]').forEach(c=>c.addEventListener('click',()=>{
+    const el=last||document.querySelector('#messages textarea'); const s=el.selectionStart??el.value.length, e=el.selectionEnd??s;
+    el.value=el.value.slice(0,s)+c.dataset.ph+el.value.slice(e); el.focus(); el.selectionStart=el.selectionEnd=s+c.dataset.ph.length;
+    el.dispatchEvent(new Event('input', {bubbles:true})); }));
+})();
+</script>
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='company.js') }}" defer></script>{% endblock %}

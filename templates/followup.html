@@ -2,30 +2,63 @@
 {% block title %}Follow-up{% endblock %}
 {% block content %}
 <div class="page-head"><div><span class="eyebrow">Today</span><h1>Who to follow up with</h1>
-<p class="muted">Open packets that need a nudge: overdue, not opened in 2 days, opened but not finished, or waiting on a second owner. Each button opens your own email or phone with a reminder ready, and the packet records it.</p></div></div>
-{% if not items %}
-<section class="panel empty"><h2>Nobody to chase today</h2><p class="muted">Every open packet is on track.</p></section>
+<p class="muted">Open packets that need a nudge: overdue, not opened in 2 days, opened but not finished, or waiting on a second owner. Each button opens your own email or phone with a reminder ready, and the packet records it. Called instead? Record it in one click. Not today? Snooze it.</p></div></div>
+{% set total = due|length + done|length %}
+{% if total %}
+<div class="fu-progress panel" id="fu-progress" data-done="{{ done|length }}" data-total="{{ total }}">
+  <div class="row" style="justify-content:space-between"><strong id="fu-progress-text">{{ done|length }} of {{ total }} followed up today</strong>
+    <span class="muted small" id="fu-progress-note">{{ 'All done for today 🎉' if not due else (due|length ~ ' to go') }}</span></div>
+  <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="{{ total }}" aria-valuenow="{{ done|length }}" aria-label="Followed up today"><span style="width:{{ (100 * done|length / total)|round|int }}%"></span></div>
+</div>
 {% endif %}
-{% for group, title in ((due, 'To do'), (done, 'Already reminded today')) %}{% if group %}
-<section class="panel {{ 'muted-panel' if group is sameas done }}">
-  <div class="panel-head"><h2>{{ title }}</h2><span class="muted small">{{ group|length }}</span></div>
+{% if not items %}
+<section class="panel empty"><h2>Nobody to chase today</h2><p class="muted">Every open packet is on track.{% if snoozed %} {{ snoozed|length }} snoozed below.{% endif %}</p></section>
+{% endif %}
+{% for group, title, gid in ((due, 'To do', 'fu-due'), (done, 'Already reminded today', 'fu-donelist')) %}{% if group or gid == 'fu-donelist' and due %}
+<section class="panel {{ 'muted-panel' if gid == 'fu-donelist' }}" id="{{ gid }}" {{ 'hidden' if not group }}>
+  <div class="panel-head"><h2>{{ title }}</h2><span class="muted small fu-count">{{ group|length }}</span></div>
   <div class="doc-list">
   {% for f in group %}{% set p = f.p %}
-    <div class="fu-row">
-      <div class="doc-main"><a href="{{ url_for('packet_detail', pid=p.id) }}"><strong>{{ p.client_name }}</strong></a>
-        <span class="small muted">{% for r in f.reasons %}<span class="fu-reason">{{ r }}</span>{% endfor %} · sent {{ p.sent_at|day }}{% if p.so_number %} · SO# {{ p.so_number }}{% endif %} · last contact {{ f.last_contact|when }}</span></div>
+    <div class="fu-row {{ 'fu-done' if gid == 'fu-donelist' }}" data-pid="{{ p.id }}" data-snooze="{{ url_for('packet_snooze', pid=p.id) }}" data-note="{{ url_for('packet_call_note', pid=p.id) }}">
+      <div class="doc-main"><span><span class="fu-check" aria-hidden="true">✓</span><a href="{{ url_for('packet_detail', pid=p.id) }}"><strong>{{ p.client_name }}</strong></a></span>
+        <span class="small muted">{% for r in f.reasons %}<span class="fu-reason">{{ r }}</span>{% endfor %} · sent {{ p.sent_at|day }}{% if p.so_number %} · SO# {{ p.so_number }}{% endif %} · last contact <span class="fu-last">{{ f.last_contact|when }}</span></span></div>
       {% if f.waiting %}{% for s in f.waiting %}
         <div class="fu-actions"><span class="small muted">Remind {{ s.name.split(' ')[0] }}:</span>
         {% set qs = quick_message(p, s, True) %}{% set kind = 'reminder' %}{% set who = s.id %}{% set primary = false %}{% include "_quick_send.html" %}</div>
       {% endfor %}{% endif %}
       {% if not f.waiting or f.reasons|length > f.waiting|length %}
         <div class="fu-actions">{% if f.waiting %}<span class="small muted">Remind {{ p.client_name.split(' ')[0] }}:</span>{% endif %}
-        {% set qs = quick_message(p, None, True) %}{% set kind = 'reminder' %}{% set who = '' %}{% set primary = true %}{% include "_quick_send.html" %}</div>
+        {% set qs = quick_message(p, None, True) %}{% set kind = 'reminder' %}{% set who = '' %}{% set primary = gid == 'fu-due' %}{% include "_quick_send.html" %}</div>
       {% endif %}
+      <div class="fu-tools">
+        <span class="small muted">Called?</span>
+        <button type="button" class="btn btn-quiet small" data-callnote="Left a voicemail">Left voicemail</button>
+        <button type="button" class="btn btn-quiet small" data-callnote="Spoke to the client">Spoke to client</button>
+        <button type="button" class="btn btn-quiet small" data-callnote="No answer">No answer</button>
+        <input type="text" class="fu-note-input" maxlength="300" placeholder="Other note, then Enter" aria-label="Note for {{ p.client_name }}">
+        <span class="small muted" style="margin-left:auto">Snooze:</span>
+        <form method="post" action="{{ url_for('packet_snooze', pid=p.id) }}" class="row" style="gap:4px">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <button class="btn btn-quiet small" name="until" value="tomorrow">Tomorrow</button>
+          <button class="btn btn-quiet small" name="until" value="3d">3 days</button>
+          <button class="btn btn-quiet small" name="until" value="1w">1 week</button></form>
+      </div>
     </div>
   {% endfor %}
   </div>
 </section>
 {% endif %}{% endfor %}
+{% if snoozed %}
+<details class="panel" id="fu-snoozed">
+  <summary><strong>Snoozed</strong> <span class="muted small">{{ snoozed|length }}</span></summary>
+  <div class="doc-list" style="margin-top:10px">
+  {% for p in snoozed %}
+    <div class="fu-row"><div class="doc-main"><a href="{{ url_for('packet_detail', pid=p.id) }}"><strong>{{ p.client_name }}</strong></a>
+      <span class="small muted">Back on the list {{ p.snooze_until|when }}</span></div>
+      <form method="post" action="{{ url_for('packet_snooze', pid=p.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn small" name="until" value="clear">Bring back now</button></form></div>
+  {% endfor %}
+  </div>
+</details>
+{% endif %}
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='quicksend.js') }}"></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='quicksend.js') }}"></script><script src="{{ url_for('static', filename='followup.js') }}" defer></script>{% endblock %}

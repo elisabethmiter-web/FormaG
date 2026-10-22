@@ -10,12 +10,13 @@
   <h1>{{ it.template_name }}</h1>
 </section>
 
-<form method="post" class="stack" id="sign-form" novalidate>
+<form method="post" class="stack" id="sign-form" novalidate data-draft="{{ url_for('form_draft', tok=p.token, iid=it.id) }}"{% if not errors %} data-restore="{{ form_draft(it.id)|tojson|forceescape }}"{% endif %}>
   <input type="hidden" name="csrf" value="{{ csrf_token() }}">
   {% if it.template_kind=='pdf' %}
   <section class="panel">
     <div class="panel-head"><h2>Read the document</h2><a class="small" href="{{ url_for('client_doc', token=p.token, iid=it.id) }}" target="_blank" rel="noopener">Open in a new tab</a></div>
     {% include "_doc_view.html" %}
+    {% set jf = read_confirm(it, 1) %}{% include "_jobfields_confirm.html" %}
   </section>
   {% elif it.template_kind=='file' %}
   <section class="panel">
@@ -79,10 +80,12 @@
     </div>
     <div class="row"><button class="btn btn-primary btn-lg" id="submit-btn">Sign{{ ' and continue' if items|selectattr('signed_at','none')|list|length > 1 else ' and finish' }}</button>
       <span class="muted small" id="submit-msg"></span></div>
+    <div class="draft-bar"><button type="button" class="btn btn-quiet" id="save-later">Save and finish later</button><span class="draft-status" id="draft-status" aria-live="polite"></span></div>
   </section>
 </form>
 {% endblock %}
 {% block scripts %}
+<script src="{{ url_for('static', filename='draft.js') }}" defer></script>
 <script src="{{ url_for('static', filename='sign.js') }}"></script>
 <script src="{{ url_for('static', filename='keepalive.js') }}"></script>
 {% endblock %}

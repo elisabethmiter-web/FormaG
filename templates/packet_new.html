@@ -1,13 +1,20 @@
 {% extends "base.html" %}
 {% block title %}New packet{% endblock %}
-{% block wrapclass %}narrow{% endblock %}
 {% block content %}
 <div class="page-head"><div><a href="{{ url_for('dashboard') }}" class="small">← Packets</a><h1>New signing packet</h1>
 <p class="muted">Pick saved forms and add one-off files. The client goes through them in order.</p></div></div>
+{% set rc = recent_clients(6) %}
+{% if rc or bundles %}<div class="np-chips" aria-label="Quick start">
+  {% if rc %}<span class="small muted">Recent clients:</span>{% for c in rc %}<button type="button" class="np-chip" data-client="{{ c.name }}" data-email="{{ c.email }}" title="{{ c.email or 'no email on file' }}">{{ c.name }}</button>{% endfor %}{% endif %}
+  {% if bundles %}<span class="small muted" style="margin-left:8px">Bundles:</span>{% for b in bundles %}<button type="button" class="np-chip" data-bundle="{{ loop.index0 }}" title="{{ b.names|join(', ') }}">📁 {{ b.name }}</button>{% endfor %}{% endif %}
+</div>{% endif %}
+<ol class="np-steps" aria-label="Steps"><li><a href="#step-client" data-step="client">Client</a></li><li><a href="#step-forms" data-step="forms">Forms</a></li><li><a href="#step-options" data-step="options">Options</a></li><li><a href="#step-send" data-step="send">Send</a></li></ol>
+<div class="np-layout">
 <form method="post" class="panel" id="packet-form" enctype="multipart/form-data">
   <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  {% if form.get('_dup_note') %}<div class="flash flash-ok">{{ form.get('_dup_note') }} Check everything, then create the packet.</div>{% endif %}
 
-  <div class="grid-2">
+  <div class="grid-2" id="step-client">
     <label for="client_name">Client name<input id="client_name" type="text" name="client_name" value="{{ form.get('client_name','') }}" required list="client-list" autocomplete="off"><datalist id="client-list"></datalist></label>
     <label for="client_email">Client email <span class="hint">Optional, for your records</span><input id="client_email" type="email" name="client_email" value="{{ form.get('client_email','') }}"></label>
   </div>
@@ -23,7 +30,7 @@
       <p class="muted small" style="align-self:end;margin:0">Each owner gets their own link, which you copy and send them. The second owner signs each form after the first, and the packet completes when both have signed.</p>
     </div>
   </fieldset>
-  <fieldset class="stack" style="border:0;padding:0;margin:0;gap:8px">
+  <fieldset class="stack" style="border:0;padding:0;margin:0;gap:8px" id="step-forms">
     <legend style="font-weight:500;margin-bottom:8px">Forms to include</legend>
     {% set bundles = bundles_for(current_company_id()) %}
     {% if bundles %}<div class="row bundle-row" style="gap:8px;align-items:center"><span class="muted small">Start from a bundle:</span>
@@ -46,6 +53,28 @@
     </label>
     <div id="adhoc-list" class="adhoc-list"></div>
   </div>
+  {% set jd = job_details_for(templates) %}
+  {% if jd.fields or jd.builtins %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='jobfields.css') }}">
+  <fieldset class="stack jd-section" id="step-jobdetails">
+    <legend>Job details</legend>
+    <p class="muted small">Printed on the forms where you placed them, so your client sees them on the page.
+      <span class="jd-nojs">Fill in the ones for the forms you ticked above; the others are ignored.</span></p>
+    {% if jd.fields %}<div class="jd-grid">
+    {% for f in jd.fields %}
+      <label class="jd-row" for="{{ f.key }}" data-tids="{{ f.tids|join(' ') }}">
+        <span>{{ f.label }} <span class="hint">{{ 'Default: ' ~ f.default if f.default else 'Required' }}</span></span>
+        <input id="{{ f.key }}" type="text" name="{{ f.key }}" maxlength="200" autocomplete="off" value="{{ form.get(f.key, f.default) }}" data-required="{{ '1' if f.required else '0' }}">
+        <span class="small muted jd-on">On: {{ f.forms|join(', ') }}</span>
+      </label>
+    {% endfor %}
+    </div>{% endif %}
+    {% for b in jd.builtins %}
+    <p class="small muted jd-builtins" data-tids="{{ b.tids|join(' ') }}">{{ b.label }} is printed on {{ b.forms|join(', ') }}: it comes from {{ "the client's name" if b.column == 'client_name' else ('the SO# above' if b.column == 'so_number' else 'the sales rep above') }}.</p>
+    {% endfor %}
+  </fieldset>
+  {% endif %}
+  <span id="step-options" class="np-anchor"></span>
   <label class="check"><input type="checkbox" name="access_code" {{ 'checked' if form.get('access_code') }}> <span><strong style="font-weight:500">Require an access code</strong><br><span class="muted small">The client enters a 4-digit code before seeing the documents. You'll give it to them by phone or in person.</span></span></label>
   <fieldset class="stack" style="border:0;padding:0;margin:0;gap:8px">
     <label class="check"><input type="checkbox" name="ask_files" id="ask_files" {{ 'checked' if form.get('ask_files') }}> <span><strong style="font-weight:500">Ask the client for photos or files</strong><br><span class="muted small">They can add them from their phone or computer while signing. Optional for the client.</span></span></label>
@@ -57,37 +86,63 @@
     <textarea id="message" name="message" rows="3" placeholder="Hi Sam, here are the onboarding documents we discussed.">{{ form.get('message','') }}</textarea></label>
   <label for="expiry_days" style="max-width:260px">Link expires after
     <select id="expiry_days" name="expiry_days">{% for d in (7,14,30,60,90) %}<option value="{{ d }}" {{ 'selected' if d==30 }}>{{ d }} days</option>{% endfor %}</select></label>
-  <div class="row">
+  <div class="row" id="step-send">
     <button class="btn btn-primary btn-lg" name="action" value="email" data-web="{{ '0' if email_app() == 'app' else '1' }}" title="Creates the packet and opens a new email to your client with the message and link ready">✉ Create and open in Email</button>
     <button class="btn btn-lg" name="action" value="link">Create signing link</button>
     <button class="btn btn-lg" name="action" value="in_person" title="Your client signs on this device now">Sign now on this device</button>
-    <span class="muted small">Opens your email (Outlook, Apple Mail…) with the message and link written in.</span>
+    <span class="muted small">Opens your email with the message. Then press Ctrl+A, Ctrl+V in it to make the link clickable.</span>
   </div>
 </form>
+<aside class="np-summary" id="np-summary" aria-live="polite" hidden>
+  <h2>Summary</h2>
+  <dl>
+    <div><dt>Client</dt><dd id="sum-client"></dd></div>
+    <div><dt>Forms and files</dt><dd id="sum-forms"></dd></div>
+    <div><dt>Options</dt><dd id="sum-options"></dd></div>
+  </dl>
+  <p class="small np-miss" id="sum-missing" style="margin:0"></p>
+</aside>
+</div>
 {% endblock %}
 {% block scripts %}
+<script src="{{ url_for('static', filename='newpacket.js') }}" defer></script>
+<script src="{{ url_for('static', filename='jobfields.js') }}" defer></script>
 <script>
-// "Create and open in Email" with webmail (Outlook on the web, Gmail): browsers only allow a new tab during the click,
-// so the tab opens now and gets the email once the packet is created.
+// "Create and open in Email": creates the packet, copies the message with a clickable link (browsers only allow that
+// during the click, so it starts now) and opens the email with the message written in.
 (function(){
   const form=document.getElementById('packet-form'), btn=form && form.querySelector('button[value=email]');
-  if(!btn || btn.dataset.web!=='1' || !window.fetch) return;
-  btn.addEventListener('click', async (e)=>{
+  if(!btn || !window.fetch) return;
+  btn.addEventListener('click', (e)=>{
     if(!form.reportValidity()) return;
     e.preventDefault();
-    const w=window.open('', '_blank');
-    if(!w){ submitNormally(); return; }
-    try{ w.document.write('<p style="font:16px system-ui;padding:24px">Opening your email…</p>'); }catch(_){}
-    btn.disabled=true;
+    const web=btn.dataset.web==='1', w=web ? window.open('', '_blank') : null;
+    if(web && !w){ submitNormally(); return; }
+    btn.disabled=true; btn.textContent='Creating…';
     const fd=new FormData(form); fd.append('action','email');
-    try{
+    const job=(async()=>{
       const r=await fetch(form.getAttribute('action')||location.href,{method:'POST',body:fd,credentials:'same-origin'});
       const m=r.redirected && r.url.match(/\/packets\/(\d+)/);
-      if(!m){ w.close(); btn.disabled=false; submitNormally(); return; }
+      if(!m) throw new Error('form');
       const c=await (await fetch('/packets/'+m[1]+'/compose.json',{credentials:'same-origin'})).json();
-      w.location=c.url;
-      location=r.url.replace('compose=1','compose=done');
-    }catch(err){ try{w.close();}catch(_){} btn.disabled=false; submitNormally(); }
+      return {page:r.url, c};
+    })();
+    let copied=Promise.reject(); copied.catch(()=>{});
+    if(navigator.clipboard && window.ClipboardItem){
+      try{
+        copied=navigator.clipboard.write([new ClipboardItem({
+          'text/html': job.then(x=>new Blob([x.c.html],{type:'text/html'})),
+          'text/plain': job.then(x=>new Blob([x.c.text],{type:'text/plain'})) })]);
+        copied.catch(()=>{});
+      }catch(_){}
+    }
+    job.then(async ({page,c})=>{
+      try{ await Promise.race([copied, new Promise(r=>setTimeout(r,1500))]); }catch(_){}
+      let ok=false; try{ await copied; ok=true; }catch(_){}
+      try{ sessionStorage.setItem('fs-copied', ok?'1':'0'); }catch(_){}
+      if(w) w.location=c.url; else location.href=c.url;   // opens the email
+      setTimeout(()=>{ location=page.replace('compose=1','compose=done'); }, w ? 0 : 700);
+    }).catch(()=>{ if(w) try{w.close();}catch(_){}; btn.disabled=false; submitNormally(); });
   });
   function submitNormally(){ const h=document.createElement('input'); h.type='hidden'; h.name='action'; h.value='email'; form.appendChild(h); form.submit(); }
 })();

@@ -81,7 +81,8 @@ def signers_of(meta, sig_path):
     if meta.get("signers"):
         return meta["signers"]
     return [{"name": meta["signer_name"], "sig_path": sig_path, "signed_at": meta["signed_at"],
-             "ip": meta.get("ip"), "user_agent": meta.get("user_agent"), "label": "Signature"}]
+             "ip": meta.get("ip"), "user_agent": meta.get("user_agent"), "label": "Signature",
+             "initials": meta.get("initials")}]
 
 
 def _sig_box(s):
@@ -131,6 +132,7 @@ def _certificate(meta, sig_path):
         ("IP address", meta.get("ip") or "—"),
         ("Device", meta.get("user_agent") or "—"),
         *((("Method", meta["method"]),) if meta.get("method") else ()),
+        *meta.get("extra_rows", ()),   # job details, pages confirmed as read, initials (jobfields.py)
         ("Confirmation", meta["packet_ref"]),
         ("Requested by", meta["business"]),
     ]
@@ -178,6 +180,7 @@ def _certificate_multi(meta, signers):
             details.append((f"Signer {n} email", s["email"]))
     if meta.get("method"):
         details.append(("Method", meta["method"]))
+    details += list(meta.get("extra_rows", ()))   # job details, pages confirmed as read, initials (jobfields.py)
     details += [("Confirmation", meta["packet_ref"])]
     if meta.get("so_number"):
         details.append(("Sales order (SO#)", meta["so_number"]))
@@ -199,10 +202,13 @@ def _certificate_multi(meta, signers):
 
 
 def _placed_overlay(width, height, boxes, signers, local_day):
-    """Signatures, names and dates drawn where the business placed them on this page."""
+    """Signatures, names, dates and initials drawn where the business placed them on this page. Job detail
+    boxes are skipped: their values were printed on the packet's own copy of the PDF when it was created."""
     buf = io.BytesIO()
     c = rl_canvas.Canvas(buf, pagesize=(width, height))
     for b in boxes:
+        if b.get("kind") not in ("signature", "name", "date", "initials"):
+            continue
         idx = int(b.get("signer", 1)) - 1
         if idx >= len(signers):
             continue  # second-owner box on a packet with one signer: left blank
@@ -216,6 +222,16 @@ def _placed_overlay(width, height, boxes, signers, local_day):
             scale = min(w / iw, h / ih)
             dw, dh = iw * scale, ih * scale
             c.drawImage(img, x, y + (h - dh) / 2, dw, dh, mask="auto")
+        elif b["kind"] == "initials":
+            text = (s.get("initials") or "").strip()
+            if not text:
+                continue
+            size = max(6.0, min(h * 0.7, 16.0))
+            while size > 6 and c.stringWidth(text, "Helvetica-Bold", size) > w - 2:
+                size -= 0.5
+            c.setFont("Helvetica-Bold", size)
+            c.setFillColor(INK)
+            c.drawCentredString(x + w / 2, y + max(1.5, (h - size * 0.72) / 2), text)
         else:
             text = s["name"] if b["kind"] == "name" else local_day(s["signed_at"])
             size = max(6.0, min(h * 0.62, 13.0))
@@ -225,6 +241,7 @@ def _placed_overlay(width, height, boxes, signers, local_day):
                 size -= 0.5
                 c.setFont("Helvetica", size)
             c.drawString(x + 1, y + max(1.5, h * 0.18), text)   # sits on the box's bottom edge, like writing on a line
+    c.showPage()   # always one page, even when every box here is left blank
     c.save()
     buf.seek(0)
     return PdfReader(buf).pages[0]

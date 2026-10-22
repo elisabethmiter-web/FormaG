@@ -4,6 +4,77 @@
 <div class="page-head"><div><span class="eyebrow">Help</span><h1>How to use {{ platform_name }}</h1>
 <p class="muted">Everything in a few minutes.{% if help_video_url %} Prefer to watch? <a href="{{ help_video_url }}" target="_blank" rel="noopener">See the how-it-works video</a>.{% endif %} Stuck? <a href="#contact">Contact us or use the support chat</a>.</p></div></div>
 
+{% set home = url_for('dashboard') %}{% set newp = url_for('new_packet') %}{% set fu = url_for('follow_up') %}{% set lib = url_for('library') %}
+{% set tours = [
+  {'id': 'send', 'title': 'Send your first packet', 'steps': [
+    {'path': home, 'sel': ['main .page-head h1', 'main h1'], 'title': 'This is your Packets page',
+     'text': 'Every packet you send shows here, with where it stands: sent, opened, in progress or signed.'},
+    {'path': home, 'sel': ['.topbar a[href$="/packets/new"]', 'a[href$="/packets/new"]'], 'title': 'Start with New packet',
+     'text': 'Click New packet (or press Next) to send forms to a client.'},
+    {'path': newp, 'sel': ['#client_name'], 'title': 'Type the client’s name',
+     'text': 'Clients you’ve sent to before are suggested as you type, with their email.'},
+    {'path': newp, 'sel': ['#picker', 'input[name=template_ids]'], 'title': 'Tick the forms',
+     'text': 'Tick the forms to send. They go to the client in the order you tick them (#1, #2…). A bundle at the top ticks a set in one click.'},
+    {'path': newp, 'sel': ['button[value=email]'], 'title': 'Create and open in Email',
+     'text': 'This creates the packet and opens a new email to your client with the message and link written in. Paste (Ctrl+A, Ctrl+V) to make the link a button, then Send.'}
+  ]},
+  {'id': 'followup', 'title': 'Follow up with a client', 'steps': [
+    {'path': home, 'sel': ['.nav a[href$="/follow-up"]', 'a[href$="/follow-up"]'], 'title': 'Open Follow-up',
+     'text': 'Follow-up lists who needs a nudge today. The number shows how many.'},
+    {'path': fu, 'sel': ['main .page-head h1', 'main h1'], 'title': 'Who to follow up with',
+     'text': 'Overdue packets, links not opened in 2 days, forms opened but not finished, and packets waiting on a second owner.'},
+    {'path': fu, 'sel': ['.fu-row', 'main .panel.empty'], 'title': 'Why each client is here',
+     'text': 'Each row says why the client needs a nudge, when it was sent and when you last got in touch. Click the name to open the packet.'},
+    {'path': fu, 'sel': ['.fu-actions', 'main .panel.empty'], 'title': 'Remind in one click',
+     'text': 'The buttons open your email or phone with a reminder ready. Once you’ve reminded someone they move to “Already reminded today”.'}
+  ]},
+  {'id': 'library', 'title': 'Add a form to the library', 'steps': ([
+    {'path': home, 'sel': ['.nav a[href$="/library"]', 'a[href$="/library"]'], 'title': 'Open the Form library',
+     'text': 'The library holds the forms you send often, ready to tick on New packet.'},
+    {'path': lib, 'sel': ['#upload-panel > summary', '#upload-panel'], 'open': 'details#upload-panel', 'title': 'Upload a file',
+     'text': 'PDF, Word, Excel, pictures or any other file you send often.'},
+    {'path': lib, 'sel': ['#file'], 'open': 'details#upload-panel', 'title': 'Choose the file',
+     'text': 'Pick it from your computer. PDFs show on screen for the client; other files are downloaded to review.'},
+    {'path': lib, 'sel': ['#upload-form input[name=name]', '#name'], 'open': 'details#upload-panel', 'title': 'Name it',
+     'text': 'The name your client sees, for example “Deposit terms 2026”. Then click Add to library.'},
+    {'path': lib, 'sel': ['a[href$="/library/new"]'], 'title': 'Or build a fillable form',
+     'text': 'Type the wording and add the fields the client fills in, with no file needed.'},
+    {'path': lib, 'sel': ['#lib-search', '#forms'], 'title': 'Find, tag and order forms',
+     'text': 'Search by name or tag, add tags to group forms, and drag ⠿ (or use ↑ ↓) to set the order New packet uses.'}
+  ] if is_manager else [
+    {'path': home, 'sel': ['.nav a[href$="/library"]', 'a[href$="/library"]'], 'title': 'Open the Form library',
+     'text': 'The library holds the forms your company sends often.'},
+    {'path': lib, 'sel': ['#lib-search', 'main h1'], 'title': 'Only management adds forms',
+     'text': 'Ask a manager to add a new form. You can search the library, click Quick look to see a form, and Send to start a packet with it.'}
+  ])}
+] %}
+{% if is_manager %}{% set tours = tours + [
+  {'id': 'team', 'title': 'Add a team member', 'steps': [
+    {'path': home, 'sel': ['.nav a[href$="/team"]', 'a[href$="/team"]'], 'title': 'Open Team',
+     'text': 'Team is where managers add, change and remove logins.'},
+    {'path': url_for('team'), 'sel': ['main form:has(input[name=email]):has(input[name=name])', 'main form:has(input[name=email])'], 'title': 'Add a login',
+     'text': 'Fill in this form to give someone their own login.'},
+    {'path': url_for('team'), 'sel': ['main form:has(input[name=email]) input[name=name]', 'main input[name=name]'], 'title': 'Their name',
+     'text': 'As it should show on packets they send.'},
+    {'path': url_for('team'), 'sel': ['main form:has(input[name=name]) input[name=email]', 'main input[name=email]'], 'title': 'Their email',
+     'text': 'They sign in with it. Choose Staff (their own packets) or Management (everything, including the library and logins).'},
+    {'path': url_for('team'), 'sel': ['main form:has(input[name=email]) button.btn-primary', 'main form:has(input[name=email]) button'], 'title': 'Create the login',
+     'text': 'Give them the temporary password yourself; they choose their own the first time they sign in.'}
+  ]}
+] %}{% endif %}
+<script type="application/json" id="fs-tours">{{ tours|tojson }}</script>
+<section class="panel help-tours fs-tour-only" id="tours" hidden aria-labelledby="tours-h">
+  <div class="panel-head"><h2 id="tours-h">Show me how</h2><span class="muted small">Short guided tours on the real pages. Press Esc to stop at any time.</span></div>
+  <div class="help-tour-list">{% for t in tours %}<button type="button" class="btn help-tour-btn" data-tour-start="{{ t.id }}" hidden><span aria-hidden="true">▶</span> {{ t.title }}</button>{% endfor %}</div>
+</section>
+<div class="help-search" id="help-search" hidden role="search">
+  <label for="help-q" class="sr-only">Search help</label>
+  <input id="help-q" type="search" placeholder="Search help, e.g. “access code”, “reminder” or “bundle”" autocomplete="off">
+  <span class="small muted" id="help-count" aria-live="polite"></span>
+</div>
+<section class="panel empty" id="help-none" hidden><h2>No results</h2>
+  <p class="muted">Nothing in help matches “<span id="help-none-q"></span>”. <strong>Contact support:</strong> email <a href="mailto:{{ support_email or 'liz@helmmsp.ca' }}">{{ support_email or 'liz@helmmsp.ca' }}</a>{% if support_chat %} or <a href="#" id="help-none-chat">open the support chat</a>{% endif %}, and we'll help.</p></section>
+
 <nav class="help-toc small" aria-label="Help topics">
   <a href="#send">Send forms</a> · <a href="#text">Text a client</a> · <a href="#in-person">Sign in person</a> · <a href="#owners">Two owners</a> · <a href="#files">Photos &amp; files</a>{% if has_approvals %} · <a href="#approvals">Layouts &amp; drawings</a>{% endif %} · <a href="#track">Keep track</a> · <a href="#signed">Signed copies</a> · <a href="#private">Privacy</a> · <a href="#managers">For managers</a> · <a href="#account">Your account</a> · <a href="#contact">Support</a> · <a href="#problems">Problems</a>
 </nav>
@@ -14,9 +85,12 @@
   <ol class="small">
     <li>Click <strong>New packet</strong> and type the client's name: clients you've sent to before are suggested, with their email.</li>
     <li>Tick the forms, or click a <strong>bundle</strong> to tick a set in one go. Add one-off files if needed.{% if has_approvals %} Add the SO# and sales rep for your records.{% endif %}</li>
-    <li>Click <strong>✉ Create and open in Email</strong>. A new email to your client opens by itself, with the subject, the message and the link to the forms already written in. Check it and press <strong>Send</strong>.</li>
+    <li>Click <strong>✉ Create and open in Email</strong>. A new email to your client opens with the subject and message written in.</li>
+    <li><strong>Make the link clickable:</strong> click in the message, press <strong>Ctrl+A</strong> then <strong>Ctrl+V</strong> (<strong>⌘A</strong>, <strong>⌘V</strong> on a Mac). The text is replaced by the same message with a clickable button named after your company and the forms (for example "{{ g.company.name if g.company else 'Your company' }} – Deposit Terms"). Press <strong>Send</strong>. This works in Outlook, Gmail, Yahoo and Apple Mail.</li>
   </ol>
-  <p class="small muted">To send it again later, open the packet and click <strong>✉ Open in Email</strong>. If you use Outlook on the web or Gmail in your browser, pick it from the ▾ next to the button. Want the link as a button named after your company and forms? Click <strong>Copy message</strong> and paste it into an empty email instead.</p>
+  <div><button type="button" class="btn small" data-tour-start="send" hidden><span aria-hidden="true">▶</span> Show me how</button></div>
+  <p class="small muted">To send it again later, open the packet and click <strong>✉ Open in Email</strong>. If you use Outlook on the web or Gmail in your browser, pick it from the ▾ next to the button. <strong>Copy message</strong> copies the clickable version again if you need it.</p>
+  <p class="small muted"><strong>Job details:</strong> if a form has job-detail boxes (for example the site address or colour), New packet asks you to fill them in, and they're printed on the form before your client sees it. Check them on the confirmation screen: they can't be changed after the packet is created (make a new packet instead).</p>
 </section>
 
 <section class="panel stack help-card" id="text">
@@ -57,16 +131,23 @@
 <section class="panel stack help-card" id="track">
   <h2>{{ 7 if has_approvals else 6 }}. Keep track</h2>
   <ul class="small">
+    <li><strong>The Packets page is live:</strong> it updates by itself when a client opens or signs (a pop-up at the bottom says who), results appear as you type in the search box, and clicking a column heading sorts by it.</li>
+    <li><strong>Charts:</strong> click a week in <strong>Sent and signed</strong>, a row in <strong>Where packets are</strong>, or one of the number cards to show just those packets; click again (or the × on the filter) to show all. <strong>Typical time to sign</strong> shows how fast your clients sign.</li>
+    <li><strong>On each row:</strong> <strong>Email</strong> opens the email (or a reminder) for that client, <strong>Copy link</strong> copies their signing link, <strong>Archive</strong> hides a finished packet. Click anywhere else on a row for a quick preview: forms, who signed, recent activity.</li>
+    <li><strong>Several at once:</strong> tick the boxes to <strong>Remind…</strong> them one after another, <strong>Export to Excel</strong>, or <strong>Archive</strong> them (with Undo).</li>
     <li>The <strong>Packets</strong> page shows Sent → Opened → In progress → Signed. <strong>New since your last visit</strong> lists what changed, and the menu shows a count.</li>
     <li>Click <strong>Turn on alerts</strong> on the Packets page to get a pop-up when a client opens or signs, while the app is open in a tab.</li>
     <li><strong>Follow-up</strong> lists who needs a nudge today: overdue, not opened in 2 days, opened but not finished, or waiting on the second owner. Each has the reminder ready in one click; once you've reminded someone, they move to <strong>Already reminded today</strong>.</li>
     <li>Clients have 48 hours to sign; late packets turn orange. Record calls and notes in <strong>Follow-ups &amp; notes</strong> on each packet.</li>
     <li>Times show in your company's time zone.</li>
+    <li class="fs-tour-only" hidden><button type="button" class="btn small" data-tour-start="followup" hidden><span aria-hidden="true">▶</span> Show me how to follow up</button></li>
+    <li><strong>More ▾</strong> on a packet: <strong>Same forms, another client</strong> (or <strong>Send again with changes</strong> for the same client) fills in New packet for you; <strong>Edit client's name or email</strong> fixes a typo without making a new packet; <strong>Archive</strong> hides a finished packet from the dashboard (nothing is deleted; see the <strong>Archived</strong> tab, or search).</li>
   </ul>
 </section>
 
 <section class="panel stack help-card" id="signed">
   <h2>{{ 8 if has_approvals else 7 }}. Signed copies</h2>
+  <p class="small"><strong>Clients can stop and come back:</strong> their answers are saved as they type, and <strong>Save and finish later</strong> lets them close the page and finish from the same link, even on another device. At the bottom of their pages they see who to contact with questions.</p>
   <ul class="small">
     <li>When everyone has signed, the packet shows <strong>Signed</strong>. <strong>Download all</strong> gives one ZIP with the signed PDFs, the audit trail and the client's files.</li>
     <li>Clients download theirs from their link at any time; ask them to keep it.</li>
@@ -83,16 +164,24 @@
   <h2>{{ 10 if has_approvals else 9 }}. For managers</h2>
   <ul class="small">
     <li><strong>Form library</strong>: upload PDFs or Word/Excel files, or build fillable forms. <strong>Place signature</strong> puts Signature, Name and Date boxes exactly where they belong on a PDF.</li>
+    <li><strong>Initials, job details and "I've read this page":</strong> in <strong>Place signature</strong>, add <strong>Initials</strong> boxes (the client initials each one), <strong>Job details</strong> boxes that your team fills in on New packet, and an <strong>I've read this page</strong> tick on any page. You can also type <code>{Placeholder}</code> words in a built form's text (for example <code>{Site address}</code>) to ask for a job detail. The signing record lists every initial and tick with its time.</li>
+    <li class="fs-tour-only" hidden><button type="button" class="btn small" data-tour-start="library" hidden><span aria-hidden="true">▶</span> Show me how to add a form</button>{% if is_manager %} <button type="button" class="btn small" data-tour-start="team" hidden><span aria-hidden="true">▶</span> Show me how to add a team member</button>{% endif %}</li>
     <li><strong>Bundles</strong>: save sets of forms you send together (for example "Kitchen job").</li>
-    <li><strong>Team</strong>: add staff and managers, reset a password, or remove someone.</li>
-    <li><strong>Company</strong>: your company name, logo and colour (shown to clients), time zone, and storage used.</li>
+    <li><strong>Team</strong>: each person's card shows packets sent, signed and overdue this month (click it to see their packets). Add someone with an <strong>invite link</strong>: they choose their own password. Click a name, email or access level to change it; the switch turns sign-in off or on (with Undo). <strong>More ▾</strong> moves someone's open packets to another person.</li>
+    <li><strong>Company</strong>: your company name, logo and colour (shown to clients), time zone, storage used, the <strong>"Need help?" line</strong> your clients see (phone and email), and the <strong>message wording</strong> your team's emails and texts use. A live preview shows what clients see as you type, and <strong>Send a test to myself</strong> lets you go through a packet exactly like a client.</li>
+    <li><strong>Keeping and clearing old packets</strong> (Company page): choose to move finished packets to Archived after some months, and to delete them for good after some years. Deleting is off unless you turn it on; the page lists what's due to be deleted in the next 30 days, and keeps a record (reference and dates only) of what was deleted. Deleted packets can't be recovered.</li>
     <li><strong>Export to Excel</strong> on the Packets page: every packet with its status and dates, for reports.</li>
   </ul>
 </section>
 
 <section class="panel stack help-card" id="account">
   <h2>{{ 11 if has_approvals else 10 }}. Your account</h2>
-  <p class="small">Click your name at the top to change your password. <strong>Open in Email</strong> uses the email app set as the default on your computer (for example Outlook). If nothing opens, set your default email app in your computer's settings, or use the ▾ next to the button to open Outlook on the web or Gmail instead.</p>
+  <p class="small">Click your name at the top to change your password (use <strong>Show</strong> to check what you typed; a meter shows how strong it is). On a shared computer, leave <strong>Stay signed in</strong> unticked at sign-in: you're signed out when the browser closes or after {{ (idle_minutes // 60) if idle_minutes >= 60 else idle_minutes }} {{ 'hours' if idle_minutes >= 120 else ('hour' if idle_minutes >= 60 else 'minutes') }} without activity, with a warning a minute before. <strong>Open in Email</strong> uses the email app set as the default on your computer (for example Outlook). If nothing opens, set your default email app in your computer's settings, or use the ▾ next to the button to open Outlook on the web or Gmail instead.</p>
+  <ul class="small">
+    <li><strong>Quick search:</strong> press <strong>Ctrl+K</strong> (<strong>⌘K</strong> on a Mac), or <strong>/</strong>, or click <strong>Search</strong> at the top, and type a client's name{% if has_approvals %}, an SO#{% endif %}, a form or a page. Use the arrow keys and <strong>Enter</strong> to open one; <strong>New packet for…</strong> starts a packet with that client filled in.</li>
+    <li><strong>Install the app:</strong> on a computer (Chrome or Edge) or an Android phone, click <strong>Install app</strong> at the top (or search for it with Ctrl+K), or use the browser menu's <strong>Install</strong> option. On an iPhone or iPad, open the app in Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>. It then opens in its own window with its own icon, and shows a "You're offline" page if the connection drops.</li>
+    <li><strong>✨ What's new</strong> at the top shows recent improvements to the app; a number shows how many you haven't read.</li>
+  </ul>
 </section>
 
 <section class="panel stack help-card" id="contact">
@@ -113,4 +202,46 @@
 </section>
 </div>
 <p class="small muted" style="margin-top:18px">Version {{ APP_VERSION }}</p>
+<style>
+.help-grid .help-card { align-content: start; }
+.help-tours .help-tour-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.help-search { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: -6px 0 0; }
+.help-search input { flex: 1 1 280px; font: inherit; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); color: var(--ink); }
+.help-search input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+mark.help-hl { background: var(--warn-soft, #fbf0dc); color: inherit; border-radius: 2px; box-shadow: 0 0 0 1px var(--warn, #9a5b00); padding: 0 1px; }
+</style>
+<script>
+(function(){
+  var box=document.getElementById('help-search'), q=document.getElementById('help-q'); if(!box||!q) return;
+  box.hidden=false;
+  var cards=[].slice.call(document.querySelectorAll('.help-grid .help-card')), toc=document.querySelector('.help-toc');
+  var none=document.getElementById('help-none'), noneQ=document.getElementById('help-none-q'), count=document.getElementById('help-count');
+  var chat=document.getElementById('help-none-chat');
+  if(chat) chat.addEventListener('click',function(e){e.preventDefault();var t=document.querySelector('#sc .sc-toggle');if(t)t.click();});
+  function unmark(){ document.querySelectorAll('mark.help-hl').forEach(function(m){ var p=m.parentNode; p.replaceChild(document.createTextNode(m.textContent),m); p.normalize(); }); }
+  function esc(w){ return w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+  function mark(root, words){
+    var alts=(words.length>1?[words.join(' ')]:[]).concat(words);  // the whole phrase first, then each word
+    var re=new RegExp('('+alts.map(esc).join('|')+')','gi');
+    var walk=document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null), nodes=[], n;
+    while((n=walk.nextNode())) if(n.nodeValue.trim() && !n.parentNode.closest('script,style,button')) nodes.push(n);
+    nodes.forEach(function(t){
+      if(!re.test(t.nodeValue)) return; re.lastIndex=0;
+      var frag=document.createDocumentFragment(), s=t.nodeValue, last=0, m;
+      while((m=re.exec(s))){ frag.appendChild(document.createTextNode(s.slice(last,m.index))); var k=document.createElement('mark'); k.className='help-hl'; k.textContent=m[0]; frag.appendChild(k); last=m.index+m[0].length; }
+      frag.appendChild(document.createTextNode(s.slice(last))); t.parentNode.replaceChild(frag,t);
+    });
+  }
+  function run(){
+    unmark();
+    var v=q.value.trim(), words=v.toLowerCase().split(/\s+/).filter(Boolean), shown=0;
+    cards.forEach(function(c){ var ok=words.every(function(w){return c.textContent.toLowerCase().indexOf(w)>=0;}); c.hidden=!ok; if(ok){shown++; if(words.length) mark(c,words);} });
+    if(toc) toc.hidden=!!words.length;
+    none.hidden=!words.length||shown>0; noneQ.textContent=v;
+    count.textContent=words.length?(shown?shown+' topic'+(shown===1?'':'s')+' match':'No topics match'):'';
+  }
+  var t; q.addEventListener('input',function(){clearTimeout(t);t=setTimeout(run,80);});
+  q.addEventListener('keydown',function(e){ if(e.key==='Escape'&&q.value){ e.stopPropagation(); q.value=''; run(); } });
+})();
+</script>
 {% endblock %}

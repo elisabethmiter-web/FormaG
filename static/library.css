@@ -1,0 +1,72 @@
+/* Form library: search, tag filters, inline tags, ordering, Quick look. Uses the tokens from style.css. */
+.lib-forms { margin-top: 18px; }
+.lib-tools { display: grid; gap: 10px; margin-bottom: 14px; }
+.lib-search { display: flex; gap: 8px; }
+.lib-search input[type=search] { flex: 1; min-width: 0; font: inherit; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); color: var(--ink); }
+.lib-search input[type=search]:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+.lib-tagbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.lib-tagfilter { display: inline-flex; align-items: center; gap: 6px; font: 600 0.8rem var(--font-body); padding: 4px 10px; border-radius: 999px; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); text-decoration: none; cursor: pointer; }
+.lib-tagfilter:hover { border-color: var(--accent); }
+.lib-tagfilter.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.lib-tagfilter.zero { opacity: .5; }
+.lib-n { font-weight: 500; font-size: .72rem; padding: 0 6px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.lib-tagfilter.on .lib-n { background: rgba(255,255,255,.22); color: inherit; }
+.lib-statusrow { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.lib-statusrow p { margin: 0; }
+.lib-hint { flex: 1 1 260px; text-align: right; }
+#lib-saved, .lib-saved { color: var(--ok); font-weight: 600; }
+
+.lib-card-top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.lib-move { display: flex; gap: 2px; align-items: center; flex-shrink: 0; }
+.lib-moveform { display: inline-flex; gap: 2px; margin: 0; }
+.lib-arrow, .lib-handle { font: 600 .85rem var(--font-body); line-height: 1; min-width: 28px; height: 28px; padding: 0 6px; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); color: var(--muted); cursor: pointer; }
+.lib-arrow:hover:not(:disabled), .lib-handle:hover { color: var(--ink); border-color: var(--muted); }
+.lib-arrow:disabled { opacity: .35; cursor: default; }
+.lib-arrow:focus-visible, .lib-handle:focus-visible, .lib-chip:focus-visible, .lib-tagfilter:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lib-handle { cursor: grab; touch-action: none; font-size: 1rem; border-style: dashed; }
+.lib-sorting, .lib-sorting * { cursor: grabbing !important; user-select: none; }
+.lib-dragging { opacity: .55; outline: 2px dashed var(--accent); outline-offset: 2px; box-shadow: 0 10px 28px rgba(0,0,0,.14); }
+.busy { opacity: .75; transition: opacity .2s; }
+.form-card { scroll-margin-top: 80px; }
+
+.lib-tags { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-height: 0; }
+.lib-tags:empty { display: none; }
+.lib-chip { cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 2px; margin: 0; }
+.lib-chip.on { background: var(--accent); color: var(--accent-ink); }
+.lib-chip-x { border: 0; background: transparent; color: inherit; font: 700 .85rem var(--font-body); padding: 0 0 0 4px; line-height: 1; cursor: pointer; opacity: .65; }
+.lib-chip-x:hover, .lib-chip-x:focus-visible { opacity: 1; }
+.lib-tags input.lib-tagadd { font: inherit; font-size: .78rem; line-height: 1.4; width: 6.5em; min-width: 0; height: auto; margin: 0; padding: 1px 9px; border: 1px dashed var(--rule); border-radius: 999px; background: transparent; color: var(--ink); box-shadow: none; }
+.lib-tags input.lib-tagadd::-webkit-calendar-picker-indicator { display: none !important; }
+.lib-tags input.lib-tagadd:hover { border-color: var(--muted); }
+.lib-tags input.lib-tagadd:focus { width: 11em; border-style: solid; border-color: var(--accent); outline: none; background: var(--surface); }
+.lib-tagedit summary { cursor: pointer; color: var(--muted); }
+
+.lib-border { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+.lib-bitem { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg); counter-increment: lb; }
+.lib-border { counter-reset: lb; }
+.lib-bitem::before { content: counter(lb); font: 600 .72rem var(--font-mono); color: var(--muted); min-width: 1.2em; text-align: right; }
+.lib-bname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-bitem .lib-arrow, .lib-bitem .lib-handle { min-width: 26px; height: 26px; }
+
+.lib-backdrop { position: fixed; inset: 0; z-index: 54; background: rgba(10,14,22,.38); }
+.lib-drawer { width: min(560px, 100vw); }
+.lib-x { font-size: 1.4rem; line-height: 1; padding: 2px 10px; }
+.lib-dtags { display: flex; flex-wrap: wrap; gap: 4px; }
+.lib-desc { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; max-height: 220px; overflow: auto; }
+.lib-pbody { display: grid; gap: 10px; }
+.lib-pbody h3 { margin: 6px 0 0; font-size: .95rem; }
+.lib-page { width: 100%; height: auto; border: 1px solid var(--rule); border-radius: 4px; background: #fff; }
+.lib-frame { width: 100%; height: 60vh; border: 1px solid var(--rule); border-radius: 4px; background: #fff; }
+.lib-fields { margin: 0; padding-left: 1.4em; display: grid; gap: 6px; }
+.lib-noscroll { overflow: hidden; }
+
+@media (max-width: 640px) {
+  .lib-hint { text-align: left; }
+  .lib-drawer { padding: 16px; }
+}
+@media (prefers-color-scheme: dark) {
+  .lib-backdrop { background: rgba(0,0,0,.55); }
+  .lib-page, .lib-frame { filter: brightness(.92); }
+}
+/* bundle rows: the ordered list may shrink (names ellipsize) and Send / Edit wrap below it on phones */
+#bundles .doc-row .doc-main { min-width: 0; flex: 1 1 260px; grid-template-columns: minmax(0, 1fr); }

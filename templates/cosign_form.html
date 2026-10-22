@@ -22,6 +22,7 @@
 </section>
 <form method="post" class="stack" id="sign-form" novalidate>
   <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  {% set jf = read_confirm(it, 2) %}{% if jf %}<section class="panel">{% include "_jobfields_confirm.html" %}</section>{% endif %}
   {% set submit_label = 'Sign and continue' if (items|length - done|length) > 1 else 'Sign and finish' %}
   {% include "_sign_panel.html" %}
 </form>

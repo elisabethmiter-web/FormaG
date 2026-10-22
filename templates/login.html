@@ -8,9 +8,11 @@
     <span class="brand">{% include "_mark.html" %}{{ platform_name }}</span>
     <div class="stack" style="gap:4px"><h1 style="font-size:1.5rem">Sign in</h1><p class="muted small">Sign in with your work email. You'll see your own company's forms and packets.</p></div>
     {% include "_flash.html" %}
+    {% if announcement %}<div class="flash {{ 'flash-warn' if announcement.level == 'warn' else 'flash-ok' }}">{{ announcement.text }}</div>{% endif %}
     {% if error %}<div class="flash flash-error">{{ error }}</div>{% endif %}
     <label for="email">Email<input id="email" type="text" name="email" value="{{ email or '' }}" autofocus autocomplete="username" inputmode="email"></label>
     <label for="password">Password<input id="password" type="password" name="password" autocomplete="current-password"></label>
+    <label class="check small" for="remember"><input type="checkbox" id="remember" name="remember"> <span>Stay signed in on this computer<br><span class="muted">Leave unticked on shared computers: you're signed out when the browser closes or after {{ (idle_minutes // 60) if idle_minutes >= 60 else idle_minutes }} {{ 'hours' if idle_minutes >= 120 else ('hour' if idle_minutes >= 60 else 'minutes') }} without activity.</span></span></label>
     <button class="btn btn-primary btn-lg">Sign in</button>
     {% if allow_signup %}<p class="small" style="margin:0">New company? <a href="{{ url_for('signup') }}">Create your company account</a></p>{% endif %}
     <p class="muted small" style="margin:0">Forgot your password? Ask a manager at your company to reset it.{% if support_name or support_phone or support_email %} Managers: contact {{ support_name or 'support' }}{% if support_phone %} at {{ support_phone }}{% endif %}{% if support_email %}{{ ' or' if support_phone else ' at' }} <a href="mailto:{{ support_email }}">{{ support_email }}</a>{% endif %}.{% endif %}</p>

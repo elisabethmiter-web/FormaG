@@ -4,7 +4,20 @@
   const csrf = (document.querySelector('meta[name=csrf]') || {}).content || '';
   const toggle = box.querySelector('.sc-toggle'), panel = box.querySelector('.sc-panel'), log = box.querySelector('.sc-log');
   const form = box.querySelector('.sc-form'), ta = form.querySelector('textarea'), badge = box.querySelector('.sc-badge');
-  let last = 0, timer = null, loaded = false;
+  let last = 0, timer = null, loaded = false, typingTimer = null;
+  // "Liz is typing…" while the owner writes an answer (checked only while the chat is open)
+  const typing = document.createElement('p');
+  typing.className = 'sc-note sc-typing'; typing.hidden = true; typing.setAttribute('aria-live', 'polite');
+  typing.style.cssText = 'padding:0 14px 6px;font-style:italic';
+  form.parentNode.insertBefore(typing, form);
+  function checkTyping() {
+    if (document.hidden) return;
+    fetch('/support/typing.json', { headers: { Accept: 'application/json' } }).then(r => r.ok ? r.json() : {}).then(d => {
+      const on = !!(d && d.typing);
+      if (on) typing.textContent = (d.name || 'Support') + ' is typing…';
+      if (typing.hidden === on) { typing.hidden = !on; if (on) log.scrollTop = log.scrollHeight; }
+    }).catch(() => {});
+  }
 
   function when(iso) {
     const d = new Date(iso);
@@ -24,7 +37,7 @@
     return fetch(box.dataset.url + '?after=' + last + '&seen=' + (seen ? 1 : 0), { headers: { Accept: 'application/json' } })
       .then(r => r.json()).then(d => {
         const before = last; (d.messages || []).forEach(add);
-        if (last !== before) log.scrollTop = log.scrollHeight;
+        if (last !== before) { log.scrollTop = log.scrollHeight; if ((d.messages || []).some(m => m.sender !== 'user')) typing.hidden = true; }
         if (seen) setBadge(0);
         loaded = true;
       }).catch(() => {});
@@ -34,15 +47,24 @@
     try { sessionStorage.setItem('sc-open', '1'); } catch (e) {}
     load(true).then(() => { log.scrollTop = log.scrollHeight; ta.focus(); });
     clearInterval(timer); timer = setInterval(() => { if (!document.hidden) load(true); }, 5000);
+    clearInterval(typingTimer); checkTyping(); typingTimer = setInterval(checkTyping, 2000);
   }
   function close() {
     panel.hidden = true; toggle.setAttribute('aria-expanded', 'false');
     try { sessionStorage.removeItem('sc-open'); } catch (e) {}
     clearInterval(timer); timer = setInterval(poll, 60000);
+    clearInterval(typingTimer); typing.hidden = true;
   }
   function poll() {
     if (document.hidden) return;
-    fetch(box.dataset.unreadUrl, { headers: { Accept: 'application/json' } }).then(r => r.json()).then(d => setBadge(d.unread)).catch(() => {});
+    fetch(box.dataset.unreadUrl, { headers: { Accept: 'application/json' } }).then(r => r.json()).then(d => {
+      const before = parseInt(badge.textContent || '0', 10) || 0;
+      setBadge(d.unread);
+      // desktop pop-up for a new support answer, if this person wants them
+      if (d.unread > before && 'Notification' in window && Notification.permission === 'granted' && (window.FS_NOTIFY || {}).support !== false) {
+        const n = new Notification('Support', { body: 'You have a new answer in the support chat.' }); n.onclick = () => { window.focus(); open(); };
+      }
+    }).catch(() => {});
   }
   toggle.addEventListener('click', () => (panel.hidden ? open() : close()));
   box.querySelector('.sc-close').addEventListener('click', close);

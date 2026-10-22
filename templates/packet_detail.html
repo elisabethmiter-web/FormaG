@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% set labels = {'draft':'Draft','sent':'Sent','viewed':'Opened','in_progress':'In progress','completed':'Signed','expired':'Expired','voided':'Cancelled'} %}
-{% set ev = {'created':'Packet created','sent':'Sent','viewed':'Opened by client','signed':'Signed','completed':'Completed','voided':'Cancelled','extended':'Link extended','reminder':'Reminder','receipt_emailed':'Confirmation emailed','email_failed':'Email failed','details':'Details updated','followup':'Follow-up','downloaded':'Downloaded by client','confirmed':'Confirmed receipt','text_failed':'Text failed','uploaded':'Files from client'} %}
+{% set ev = {'created':'Packet created','sent':'Sent','viewed':'Opened by client','signed':'Signed','completed':'Completed','voided':'Cancelled','extended':'Link extended','reminder':'Reminder','receipt_emailed':'Confirmation emailed','email_failed':'Email failed','details':'Details updated','followup':'Follow-up','downloaded':'Downloaded by client','confirmed':'Confirmed receipt','text_failed':'Text failed','uploaded':'Files from client','edited':'Client details changed','archived':'Archive','saved':'Saved to finish later'} %}
 {% block title %}{{ p.client_name }}{% endblock %}
 {% block content %}
+<span id="packet-live" hidden data-url="{{ url_for('packet_preview', pid=p.id) }}"></span>
 <div class="page-head">
   <div><a href="{{ url_for('dashboard') }}" class="small">← Packets</a>
     <div class="row"><h1>{{ p.client_name }}</h1><span class="stamp s-{{ state }}">{{ labels[state] }}</span></div>
@@ -10,9 +11,31 @@
   <div class="row">
     <a class="btn" href="{{ url_for('packet_zip', pid=p.id) }}" title="Signed PDFs, audit trail and files from the client in one ZIP">Download all</a>
     <a class="btn" href="{{ url_for('admin_audit_pdf', pid=p.id) }}">Audit trail PDF</a>
+    <details class="more-menu"><summary class="btn" aria-label="More actions">More ▾</summary>
+      <div class="more-list">
+        <a href="{{ url_for('new_packet', **{'from': p.id}) }}">Same forms, another client</a>
+        <a href="{{ url_for('new_packet', **{'from': p.id, 'same': 1}) }}">Send again with changes</a>
+        <a href="#edit-client" onclick="var d=document.getElementById('edit-client');d.open=true;d.scrollIntoView({block:'center'});">Edit client's name or email</a>
+        <form method="post" action="{{ url_for('archive_packet', pid=p.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}">{% if p.archived_at %}<input type="hidden" name="undo" value="1"><input type="hidden" name="next" value="{{ url_for('packet_detail', pid=p.id) }}">{% endif %}
+          <button>{{ 'Take out of the archive' if p.archived_at else 'Archive (hide from the dashboard)' }}</button></form>
+      </div></details>
   </div>
 </div>
 
+{% if p.archived_at %}<div class="flash flash-due">Archived {{ p.archived_at|when }}: hidden from the dashboard. Nothing is deleted.</div>{% endif %}
+<details class="panel edit-client" id="edit-client">
+  <summary><strong>Edit client's name or email</strong></summary>
+  <form method="post" action="{{ url_for('edit_client', pid=p.id) }}" class="stack" style="gap:10px;margin-top:10px">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <div class="grid-2"><label>Client name<input name="client_name" value="{{ p.client_name }}" required maxlength="120"></label>
+      <label>Client email <span class="hint">Optional</span><input name="client_email" type="email" value="{{ p.client_email or '' }}" maxlength="200"></label></div>
+    {% set s2 = second_signer(p.id) %}{% if s2 %}<input type="hidden" name="signer_id" value="{{ s2.id }}">
+    <div class="grid-2"><label>Second owner's name<input name="cosigner_name" value="{{ s2.name }}" required maxlength="120"></label>
+      <label>Second owner's email <span class="hint">Optional</span><input name="cosigner_email" type="email" value="{{ s2.email or '' }}" maxlength="200"></label></div>{% endif %}
+    <p class="small muted" style="margin:0">The signing link stays the same. Forms already signed keep the name that was signed.</p>
+    <div><button class="btn btn-primary">Save</button></div>
+  </form>
+</details>
 {% if deadline.overdue %}
 <div class="flash flash-overdue">Not completed within {{ sign_hours }} hours: sent {{ p.sent_at|when }}, {{ deadline.label|lower }}. Follow up with {{ p.client_name }} and record it below.</div>
 {% elif deadline.due_at %}
@@ -25,13 +48,14 @@
 {% endif %}
 {% if state not in ('completed','voided') %}
 {% if request.args.get('compose') %}
-<div class="flash flash-ok" role="status"><strong>Packet ready.</strong> A new email to {{ p.client_name }} is opening{% if email_app() != 'app' %} in a new tab{% endif %}, with the message and link written in. Check it and press Send.
-  <span id="compose-banner-wait">If it didn't open, click <strong>✉ Open in Email</strong> below{% if email_app() != 'app' %} (your browser may have blocked the new tab){% endif %}.</span>{% if p.access_code %} Give the access code separately.{% endif %}</div>
+<div class="flash flash-ok" role="status"><strong>Packet ready.</strong> A new email to {{ p.client_name }} is open with the message and link.
+  <strong>To make the link clickable:</strong> click in the message, press <strong>Ctrl+A</strong> then <strong>Ctrl+V</strong> (<strong>⌘A</strong>, <strong>⌘V</strong> on a Mac), then press Send.
+  If the email didn't open, click <strong>✉ Open in Email</strong> below.{% if p.access_code %} Give the access code separately.{% endif %}</div>
 {% endif %}
 <section class="panel" id="send-panel">
   <div class="panel-head"><h2>Signing link</h2><span class="muted small">Valid until {{ p.expires_at|day }}</span></div>
   <p class="muted small">Send it from your own email or phone with the buttons below, or copy it. Anyone with the link can open it, so send it only to your client{{ '' if p.access_code else ' (or turn on an access code)' }}.</p>
-  {% set qs = quick_message(p, None, p.sent_at and events|selectattr('type','equalto','sent')|list|length > 1) %}{% set kind = 'send' %}{% set who = '' %}{% set primary = true %}
+  {% set qs = quick_message(p, None, already_emailed(p.id)) %}{% set kind = 'send' %}{% set who = '' %}{% set primary = true %}
   <div style="margin-bottom:10px">{% include "_quick_send.html" %}</div>
   <div class="linkbox"><input id="signing-link" type="text" readonly value="{{ link }}" aria-label="Signing link">
     <button class="btn btn-primary" type="button" id="copy-link">Copy link</button>
@@ -51,7 +75,17 @@
 
 <div class="detail-grid">
   <div class="stack">
-  <section class="panel">
+  {% set tl = packet_timeline(p) %}
+<section class="panel" id="timeline">
+  <div class="panel-head"><h2>Timeline</h2>{% if tl.total %}<span class="muted small">Signed {{ tl.total }} after it was sent</span>{% endif %}</div>
+  <ol class="ptl">
+  {% for s in tl.steps %}
+    <li class="{{ 'done' if s.done else 'wait' }}">{% if s.gap %}<span class="gap">+{{ s.gap }}</span>{% endif %}
+      <strong>{{ s.label }}</strong><span class="when">{{ s.at|when if s.at else '' }}{% if s.who %} · {{ s.who }}{% endif %}</span></li>
+  {% endfor %}
+  </ol>
+</section>
+<section class="panel">
     <div class="panel-head"><h2>Forms and files</h2><span class="muted small">{{ signed }} of {{ total }} signed</span></div>
     <div class="doc-list">
     {% for it in items %}
@@ -96,6 +130,13 @@
   </div>
 
   <aside class="stack">
+    {% set jdv = packet_job_details(p) %}{% if jdv %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='jobfields.css') }}">
+    <section class="panel jd-box" id="job-details">
+      <h2>Job details</h2>
+      <dl>{% for k, v in jdv %}<dt>{{ k }}</dt><dd>{{ v or '—' }}</dd>{% endfor %}</dl>
+      <p class="muted small">Printed on the forms when the packet was created. To change them, make a new packet with the right details and cancel this one.</p>
+    </section>{% endif %}
     <section class="panel">
       <h2>Details</h2>
       <dl class="meta">
@@ -118,6 +159,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
+<script src="{{ url_for('static', filename='packet-live.js') }}" defer></script>
 <script src="{{ url_for('static', filename='quicksend.js') }}"></script>
 <script>
 const btn=document.getElementById('copy-link');

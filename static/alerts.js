@@ -19,7 +19,8 @@
       if (!r.ok) return;
       const d = await r.json();
       if (after && Notification.permission === 'granted') {
-        d.updates.slice(0, 3).forEach(u => { const n = new Notification(document.title.split(' · ').pop(), { body: u.text }); n.onclick = () => { window.focus(); location.href = u.url; }; });
+        const prefs = window.FS_NOTIFY || {}, kind = (t) => (t === 'confirmed' ? 'completed' : t);
+        d.updates.filter(u => prefs[kind(u.type)] !== false).slice(0, 3).forEach(u => { const n = new Notification(document.title.split(' · ').pop(), { body: u.text }); n.onclick = () => { window.focus(); location.href = u.url; }; });
       }
       after = d.now;
     } catch (e) { /* offline or restarting: try again next minute */ }
