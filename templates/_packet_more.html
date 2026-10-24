@@ -13,7 +13,7 @@
     <p class="muted small" style="margin:0">{% if s.signed == s.total %}{{ s.name.split(' ')[0] }} has signed everything.{% elif s.ready %}{{ s.ready }} form{{ 's' if s.ready != 1 }} ready for {{ s.name.split(' ')[0] }} to sign.{% else %}Waiting for {{ p.client_name.split(' ')[0] }} to sign first.{% endif %}{% if s.first_viewed_at %} Opened their link {{ s.first_viewed_at|when }}.{% endif %}</p>
     <div class="linkbox"><input type="text" readonly value="{{ s.link }}" aria-label="{{ s.name }}'s signing link" id="cos-link-{{ s.id }}">
       <button class="btn" type="button" onclick="navigator.clipboard.writeText(document.getElementById('cos-link-{{ s.id }}').value);this.textContent='Copied';setTimeout(()=>this.textContent='Copy link',1800)">Copy link</button></div>
-    {% set qs = quick_message(p, s, s.sent_at is not none) %}{% set kind = 'send' %}{% set who = s.id %}{% set primary = s.ready > 0 %}
+    {% set qs = quick_message(p, s, s.sent_at is not none) %}{% set kind = 'reminder' if s.sent_at is not none else 'send' %}{% set who = s.id %}{% set primary = s.ready > 0 %}
     {% include "_quick_send.html" %}
     <div class="row">
       <form method="post" action="{{ url_for('in_person', pid=p.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="who" value="{{ s.id }}"><button class="btn btn-quiet">{{ s.name.split(' ')[0] }} signs on this device</button></form>

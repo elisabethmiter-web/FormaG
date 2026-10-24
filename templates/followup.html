@@ -20,7 +20,7 @@
   <div class="doc-list">
   {% for f in group %}{% set p = f.p %}
     <div class="fu-row {{ 'fu-done' if gid == 'fu-donelist' }}" data-pid="{{ p.id }}" data-snooze="{{ url_for('packet_snooze', pid=p.id) }}" data-note="{{ url_for('packet_call_note', pid=p.id) }}">
-      <div class="doc-main"><span><span class="fu-check" aria-hidden="true">✓</span><a href="{{ url_for('packet_detail', pid=p.id) }}"><strong>{{ p.client_name }}</strong></a></span>
+      <div class="doc-main"><span><span class="fu-tick" aria-hidden="true">✓</span><a href="{{ url_for('packet_detail', pid=p.id) }}"><strong>{{ p.client_name }}</strong></a></span>
         <span class="small muted">{% for r in f.reasons %}<span class="fu-reason">{{ r }}</span>{% endfor %} · sent {{ p.sent_at|day }}{% if p.so_number %} · SO# {{ p.so_number }}{% endif %} · last contact <span class="fu-last">{{ f.last_contact|when }}</span></span></div>
       {% if f.waiting %}{% for s in f.waiting %}
         <div class="fu-actions"><span class="small muted">Remind {{ s.name.split(' ')[0] }}:</span>

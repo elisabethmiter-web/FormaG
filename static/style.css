@@ -322,11 +322,15 @@ tbody tr.row-overdue:hover td { background: color-mix(in srgb, var(--late-soft) 
 .flash-overdue { background: var(--late-soft); color: var(--late); border-left: 4px solid var(--late); }
 .flash-due { background: var(--accent-soft); color: var(--accent); }
 .fu-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.fu-row { display: grid; grid-template-columns: minmax(170px, 220px) minmax(0, 1fr); gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 6px; }
-.fu-row.done { background: var(--ok-soft); border-color: transparent; }
-.fu-row.done .fu-meta { color: var(--ok); }
-.fu-row input[type=text] { padding: 7px 10px; }
-@media (max-width: 560px) { .fu-row { grid-template-columns: 1fr; } }
+/* packet page: follow-up rows (scoped so the Follow-up page's rows can't change them) */
+.fu-list > .fu-row { display: grid; grid-template-columns: minmax(170px, 220px) minmax(0, 1fr); gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 6px; opacity: 1; }
+.fu-list > .fu-row:last-child { border-bottom: 1px solid var(--rule); }
+.fu-list > .fu-row.done { background: var(--ok-soft); border-color: transparent; }
+.fu-list > .fu-row.done .fu-meta { color: var(--ok); }
+.fu-list > .fu-row input[type=text] { padding: 7px 10px; }
+.fu-list .fu-check { display: flex; cursor: pointer; }
+@media (max-width: 560px) { .fu-list > .fu-row { grid-template-columns: 1fr; } }
+.fu-notes-cell { margin-top: 3px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* forms the client still has to complete, shown on the dashboard */
 .still-needed { margin-top: 6px; color: var(--late); font-size: 12.5px; line-height: 1.35; max-width: 240px; }
@@ -619,8 +623,8 @@ tr.db-flash td { animation: db-flash 3.5s ease-out; }
 .fu-progress { display: grid; gap: 6px; margin-bottom: 16px; }
 .fu-progress .bar { height: 10px; border-radius: 5px; background: var(--rule); overflow: hidden; }
 .fu-progress .bar span { display: block; height: 100%; background: var(--ok, #1d7a4f); transition: width .4s; }
-.fu-row.fu-done { opacity: .55; } .fu-row.fu-done .fu-check { display: inline-flex; }
-.fu-check { display: none; color: var(--ok); font-weight: 700; margin-right: 6px; }
+.fu-row.fu-done { opacity: .55; } .fu-row.fu-done .fu-tick { display: inline-flex; }
+.fu-tick { display: none; color: var(--ok); font-weight: 700; margin-right: 6px; }
 .fu-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
 .fu-tools .btn { padding: 3px 10px; }
 .fu-note-input { width: 220px; padding: 4px 8px; font-size: .85rem; }
@@ -675,3 +679,12 @@ tr.db-flash td { animation: db-flash 3.5s ease-out; }
 .sc-intro input { padding: 8px 10px; font-size: .92rem; }
 .sc-intro input[aria-invalid="true"] { border-color: var(--bad); }
 .sc-sys { align-self: center; text-align: center; font-size: .75rem; color: var(--muted); background: var(--bg); border: 1px solid var(--rule); border-radius: 999px; padding: 3px 10px; margin: 2px 0; max-width: 95%; }
+
+/* packet page: delete permanently */
+.more-list a.more-danger { color: var(--bad); border-top: 1px solid var(--rule); border-radius: 0 0 6px 6px; margin-top: 4px; }
+.danger-zone { border-color: var(--bad); }
+.danger-zone summary { cursor: pointer; color: var(--bad); }
+.danger-zone[open] { background: var(--bad-soft, #fbe7e5); }
+.danger-zone .btn-danger { background: var(--bad); border-color: var(--bad); color: #fff; }
+
+.followups.fu-flash { box-shadow: 0 0 0 3px var(--ok-soft); transition: box-shadow .4s; }

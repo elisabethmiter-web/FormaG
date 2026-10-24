@@ -339,6 +339,22 @@ def register(A):
         return out
 
     A.run_retention = run_retention
+
+    @app.route("/packets/<int:pid>/delete", methods=["POST"])
+    @A.login_required
+    def packet_delete(pid):
+        """Management: delete one packet for good (signed PDFs, signatures, files from the client, history)."""
+        if not A.is_manager():
+            abort(403)
+        p = db().execute("SELECT * FROM packets WHERE id=? AND company_id=?", (pid, A.cid())).fetchone() or abort(404)
+        if request.form.get("understand") != "on":
+            flash("Tick the box to confirm the packet will be deleted permanently. Nothing was deleted.", "error")
+            return redirect(url_for("packet_detail", pid=pid) + "#delete-packet")
+        ref, client = A.packet_ref(p), p["client_name"]
+        delete_packet(p, f"Deleted by {A.actor()}")
+        db().commit()
+        flash(f"Packet {ref} for {client} was deleted permanently.", "ok")
+        return redirect(url_for("dashboard"))
     state = {"thread": None}
 
     def _loop():

@@ -64,7 +64,8 @@ def register(A):
             "voided_at": p["voided_at"], "archived": bool(p["archived_at"]) if "archived_at" in keys else False,
             "sent_day": day(p["sent_at"]), "done_day": day(p["completed_at"]),
             "deadline": {"label": dl.get("label") or "", "overdue": bool(dl.get("overdue")), "due_at": dl.get("due_at")},
-            "fu": {"n": fu.get("n"), "day": day(fu.get("at")), "note": fu.get("note") or ""} if fu else None,
+            "fu": {"n": fu.get("n"), "day": day(fu.get("at")), "note": fu.get("note") or "", "by": fu.get("by") or ""} if fu else None,
+            "notes": (p["notes"] or "")[:300] if "notes" in keys else "",
             "url": url_for("packet_detail", pid=p["id"]),
         }
 
@@ -119,7 +120,10 @@ def register(A):
                    "when": A.app.jinja_env.filters["when"](e["at"])}
                   for e in db().execute("SELECT * FROM events WHERE packet_id=? ORDER BY at DESC, id DESC LIMIT 8", (pid,))]
         r = row(p)
+        fus = [{"n": i + 1, "done": bool(f.get("done")), "day": day(f.get("at")), "by": f.get("by") or "", "note": f.get("note") or ""}
+               for i, f in enumerate(A.followups_of(p)) if f.get("done") or f.get("note")]
         r.update(items=items, events=events, message=p["message"] or "", access_code=bool(p["access_code"]),
+                 followups=fus, notes_full=p["notes"] or "",
                  link=(A.BASE_URL or request.url_root.rstrip("/")) + f"/s/{p['token']}",
                  expires_day=day(p["expires_at"]), emailed=A.app.jinja_env.globals["already_emailed"](pid))
         return jsonify(r)

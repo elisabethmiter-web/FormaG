@@ -18,6 +18,7 @@
         <a href="#edit-client" onclick="var d=document.getElementById('edit-client');d.open=true;d.scrollIntoView({block:'center'});">Edit client's name or email</a>
         <form method="post" action="{{ url_for('archive_packet', pid=p.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}">{% if p.archived_at %}<input type="hidden" name="undo" value="1"><input type="hidden" name="next" value="{{ url_for('packet_detail', pid=p.id) }}">{% endif %}
           <button>{{ 'Take out of the archive' if p.archived_at else 'Archive (hide from the dashboard)' }}</button></form>
+        {% if is_manager %}<a href="#delete-packet" class="more-danger" onclick="var d=document.getElementById('delete-packet');d.open=true;d.scrollIntoView({block:'center'});this.closest('details').open=false;">Delete packet permanently…</a>{% endif %}
       </div></details>
   </div>
 </div>
@@ -55,7 +56,7 @@
 <section class="panel" id="send-panel">
   <div class="panel-head"><h2>Signing link</h2><span class="muted small">Valid until {{ p.expires_at|day }}</span></div>
   <p class="muted small">Send it from your own email or phone with the buttons below, or copy it. Anyone with the link can open it, so send it only to your client{{ '' if p.access_code else ' (or turn on an access code)' }}.</p>
-  {% set qs = quick_message(p, None, already_emailed(p.id)) %}{% set kind = 'send' %}{% set who = '' %}{% set primary = true %}
+  {% set sent_before = already_emailed(p.id) %}{% set qs = quick_message(p, None, sent_before) %}{% set kind = 'reminder' if sent_before else 'send' %}{% set who = '' %}{% set primary = true %}
   <div style="margin-bottom:10px">{% include "_quick_send.html" %}</div>
   <div class="linkbox"><input id="signing-link" type="text" readonly value="{{ link }}" aria-label="Signing link">
     <button class="btn btn-primary" type="button" id="copy-link">Copy link</button>
@@ -112,7 +113,7 @@
     <div class="panel-head"><h2>Follow-ups &amp; notes</h2>
       {% set done_n = followups|selectattr('done')|list|length %}<span class="muted small">{{ done_n }} of {{ followups|length }} follow-ups done</span></div>
     <form method="post" action="{{ url_for('save_followups', pid=p.id) }}" class="stack" style="gap:10px">
-      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="loaded_at" value="{{ now() }}">
       <ol class="fu-list">
       {% for f in followups %}
         <li class="fu-row {{ 'done' if f.done }}">
@@ -124,9 +125,36 @@
       </ol>
       <label for="notes">Notes <span class="hint">Anything else about this packet, visible to the team only</span>
         <textarea id="notes" name="notes" rows="3">{{ p.notes or '' }}</textarea></label>
-      <div><button class="btn btn-primary">Save follow-ups</button></div>
+      <div class="row" style="gap:10px;align-items:center"><button class="btn btn-primary">Save follow-ups</button><span class="small muted fu-unsaved" hidden>Not saved yet</span></div>
     </form>
+    <script>
+    (function () {   // typing a note ticks that follow-up; a reminder shows until you save
+      var f = document.querySelector('#followups form'); if (!f) return;
+      var hint = f.querySelector('.fu-unsaved');
+      f.querySelectorAll('.fu-row').forEach(function (row) {
+        var box = row.querySelector('input[type=checkbox]'), note = row.querySelector('input[type=text]');
+        note.addEventListener('input', function () { if (note.value.trim() && !box.checked && !box.dataset.touched) { box.checked = true; row.classList.add('done'); } });
+        box.addEventListener('change', function () { box.dataset.touched = '1'; row.classList.toggle('done', box.checked); });
+      });
+      f.addEventListener('input', function () { hint.hidden = false; });
+      f.addEventListener('change', function () { hint.hidden = false; });
+    })();
+    </script>
   </section>
+
+  {% if is_manager %}
+  <details class="panel danger-zone" id="delete-packet">
+    <summary><strong>Delete this packet permanently</strong> <span class="muted small">Management only</span></summary>
+    <form method="post" action="{{ url_for('packet_delete', pid=p.id) }}" class="stack" style="gap:10px;margin-top:12px"
+          onsubmit="return confirm('Delete the packet for {{ p.client_name|e }} permanently? This cannot be undone.')">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <p class="small" style="margin:0"><strong>The packet will be deleted permanently.</strong> This removes the packet, its signed PDFs, signatures, files from the client, follow-ups, notes and history. It can't be undone or recovered, by you or by {{ platform_name }}. The client's link stops working. Forms in your library are not affected.</p>
+      <p class="small muted" style="margin:0">To keep a copy, click <strong>Download all</strong> first. To just hide it from the dashboard, use <strong>Archive</strong> instead.</p>
+      <label class="check small"><input type="checkbox" name="understand" required> <span>I understand this packet will be deleted permanently and can't be recovered.</span></label>
+      <div><button class="btn btn-danger">Delete permanently</button></div>
+    </form>
+  </details>
+  {% endif %}
   </div>
 
   <aside class="stack">

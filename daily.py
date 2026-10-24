@@ -47,7 +47,7 @@ try:
 except ImportError:  # pragma: no cover
     ZoneInfo = None
 
-APP_VERSION = "2026.10.21-12"   # shown at the bottom of the Help page, to check which version is live
+APP_VERSION = "2026.10.24-2"   # shown at the bottom of the Help page, to check which version is live
 BACKUP_KEEP = max(1, int(os.environ.get("BACKUP_KEEP", "7")))
 RESTORE_FOLDERS = ("templates", "signed", "client_uploads", "brand", "seal")
 SUPPORT_NAME = os.environ.get("SUPPORT_NAME", "")
@@ -403,8 +403,35 @@ def register(A):
         db().execute("UPDATE packets SET last_nudge_at=? WHERE id=?", (A.now(), pid))
         A.log_event(pid, "reminder" if reminder else "sent",
                     f"{'reminder' if reminder else 'link'} for {who} via {via} · by {A.actor()}")
+        if reminder and request.form.get("via") in ("email", "phone"):
+            record_reminder_followup(p, who, "email" if request.form.get("via") == "email" else "text message")
         db().commit()
         return ("", 204)
+
+    def record_reminder_followup(p, who, how):
+        """A reminder sent from the app fills in the packet's next follow-up (once per few minutes, so a double click
+        or sending by email and then by text right after counts once). All 5 used: added to the notes instead."""
+        p = db().execute("SELECT * FROM packets WHERE id=?", (p["id"],)).fetchone()
+        note = f"Reminder sent to {who} by {how}"
+        fu = A.followups_of(p)
+        recent = (utcnow() - timedelta(minutes=10)).isoformat()
+        for f in fu:
+            if f.get("done") and (f.get("at") or "") >= recent and str(f.get("note") or "").startswith("Reminder sent") \
+                    and f.get("by") == A.actor():
+                if how not in f["note"]:
+                    f["note"] = (f["note"] + f" and {how}")[:500]
+                    db().execute("UPDATE packets SET followups_json=? WHERE id=?", (json.dumps(fu), p["id"]))
+                return
+        slot = next((i for i, f in enumerate(fu) if not f.get("done")), None)
+        if slot is not None:
+            keep = str(fu[slot].get("note") or "").strip()   # a note typed earlier for this follow-up is kept
+            fu[slot] = {"done": True, "at": A.now(), "by": A.actor(), "note": (note + (f" · {keep}" if keep else ""))[:500]}
+            db().execute("UPDATE packets SET followups_json=? WHERE id=?", (json.dumps(fu), p["id"]))
+            A.log_event(p["id"], "followup", f"follow-up {slot + 1} recorded: {note} · by {A.actor()}")
+        else:
+            stamp = A.to_local(utcnow()).strftime("%b %-d %-I:%M %p")
+            notes = ((p["notes"] or "") + f"\n{stamp} · {A.actor()}: {note}").strip()[:5000]
+            db().execute("UPDATE packets SET notes=? WHERE id=?", (notes, p["id"]))
 
     # ------------------------------------------------ 2  what's new since the last visit
     def last_seen():

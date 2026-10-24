@@ -149,6 +149,7 @@ The client reads every document right above where they sign:
 - **Quick search** (`upkeep.py`): **Ctrl+K** / **⌘K** / **/** or the **Search** button opens one box for clients, packets, SO#, forms, team members and pages, with keyboard navigation. **New packet for…** opens New packet with the client filled in.
 - **Installable app**: `/manifest.webmanifest`, `/sw.js` and icons let staff install the app on a computer, Android or iPhone (Share → Add to Home Screen). The service worker only keeps a copy of the look-and-feel files and shows a "You're offline" page; it never stores packets or client data.
 - **Keeping and clearing old packets** (Company page, managers): archive finished packets after 3–24 months and/or delete them for good after 1–10 years (off by default; deleting needs a confirmation tick). A daily job applies the rules; the page lists what's due in the next 30 days, and `retention_log` keeps only the reference and dates of what was deleted. Shared library files are never removed.
+- **Delete a packet permanently** (management, `upkeep.py`): packet page → More ▾ → Delete packet permanently…, with a confirmation tick. Removes the packet, signed PDFs, signatures, files from the client and history; the reference and dates are kept in the Company page's deletion record ("Deleted by …").
 - **Help when stuck**: the sign-in page shows who to call (`SUPPORT_NAME`, `SUPPORT_PHONE`, `SUPPORT_EMAIL`), and the **Help** page has step-by-step answers for the common jobs, plus your video link (`HELP_VIDEO_URL`).
 
 ## Run it on your computer (5 minutes)

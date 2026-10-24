@@ -164,6 +164,7 @@
     if (p.fu) { fu.append(el('strong', { text: '#' + p.fu.n }), ' · ' + p.fu.day); if (p.fu.note) fu.append(el('div', { class: 'muted fu-note', title: p.fu.note, text: p.fu.note.length > 60 ? p.fu.note.slice(0, 57) + '…' : p.fu.note })); }
     else if (p.deadline.overdue) fu.append(el('span', { class: 'due late', text: 'None yet' }));
     else fu.append(el('span', { class: 'muted', text: '—' }));
+    if (p.notes) fu.append(el('div', { class: 'muted fu-notes-cell', title: p.notes, text: '📝 ' + p.notes }));
     tr.append(fu);
     tr.append(actionsCell(p));
     return tr;
@@ -403,6 +404,11 @@
         el('ul', { class: 'db-items' }, p.items.map((it) => el('li', { class: it.signed ? 'ok' : '' }, el('span', { 'aria-hidden': 'true', text: it.signed ? '✓' : (it.sign ? '○' : '·') }),
           el('span', {}, el('span', { text: it.name }), it.signed ? el('span', { class: 'muted small', text: ' · ' + (it.by ? it.by + ', ' : '') + it.day }) : (it.sign ? null : el('span', { class: 'muted small', text: ' · no signature needed' })))))),
         p.message ? el('div', {}, el('h3', { text: 'Note to the client' }), el('p', { class: 'small', style: 'white-space:pre-wrap;margin:0', text: p.message })) : null,
+        (p.followups || []).length || p.notes_full ? el('div', {}, el('h3', { text: 'Follow-ups & notes' }),
+          (p.followups || []).length ? el('ul', { class: 'db-events' }, p.followups.map((f) => el('li', {},
+            el('strong', { text: 'Follow-up ' + f.n }), el('span', { class: 'small', text: f.note ? ' · ' + f.note : '' }),
+            el('div', { class: 'muted small', text: f.done ? ('Done ' + f.day + (f.by ? ' · ' + f.by : '')) : 'Not done yet' })))) : null,
+          p.notes_full ? el('p', { class: 'small', style: 'white-space:pre-wrap;margin:6px 0 0', text: '📝 ' + p.notes_full }) : null) : null,
         el('h3', { text: 'Recent activity' }),
         el('ul', { class: 'db-events' }, p.events.map((e) => el('li', {}, el('strong', { text: e.label }), e.detail ? el('span', { class: 'small', text: ' · ' + e.detail }) : null, el('div', { class: 'muted small', text: e.when })))),
         el('p', { class: 'muted small', text: 'Link valid until ' + p.expires_day + (p.access_code ? ' · access code on' : '') })].filter(Boolean));

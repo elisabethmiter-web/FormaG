@@ -83,7 +83,23 @@
     fd.append('csrf', csrf); fd.append('via', via); fd.append('kind', box.dataset.kind || 'send'); fd.append('who', box.dataset.who || '');
     if (navigator.sendBeacon) navigator.sendBeacon(box.dataset.nudge, fd);
     else fetch(box.dataset.nudge, { method: 'POST', body: fd, keepalive: true });
+    if (box.dataset.kind === 'reminder' && (via === 'email' || via === 'phone')) setTimeout(refreshFollowups, 1500);
   });
+
+  // A reminder fills in the packet's next follow-up: show it on the packet page right away
+  // (only if nobody is in the middle of typing in the follow-ups).
+  function refreshFollowups() {
+    const cur = document.getElementById('followups'); if (!cur) return;
+    const hint = cur.querySelector('.fu-unsaved'); if (hint && !hint.hidden) return;
+    fetch(location.pathname, { credentials: 'same-origin' }).then((r) => r.text()).then((html) => {
+      const fresh = new DOMParser().parseFromString(html, 'text/html').getElementById('followups');
+      const now = document.getElementById('followups');
+      if (!fresh || !now || (now.querySelector('.fu-unsaved') && !now.querySelector('.fu-unsaved').hidden)) return;
+      now.replaceWith(fresh);
+      fresh.querySelectorAll('script').forEach((old) => { const sc = document.createElement('script'); sc.textContent = old.textContent; old.replaceWith(sc); });
+      fresh.classList.add('fu-flash'); setTimeout(() => fresh.classList.remove('fu-flash'), 2500);
+    }).catch(() => {});
+  }
 
   // Arrived from "Create and open in Email"
   const params = new URLSearchParams(location.search);

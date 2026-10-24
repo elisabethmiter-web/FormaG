@@ -295,6 +295,9 @@ def signing_url(token):
     return f"{base}/s/{token}"
 
 
+app.jinja_env.globals["now"] = lambda: now()   # templates: the current time (e.g. when a form was opened)
+
+
 @app.template_filter("when")
 def fmt_when(value):
     if not value:
@@ -1254,10 +1257,14 @@ def save_followups(pid):
     p = db().execute("SELECT * FROM packets WHERE id=?", (pid,)).fetchone() or abort(404)
     old = followups_of(p)
     new, changes = [], []
+    loaded_at = request.form.get("loaded_at", "")
     for i in range(FOLLOWUP_SLOTS):
         done = request.form.get(f"fu_done_{i}") == "on"
         note = request.form.get(f"fu_note_{i}", "").strip()[:500]
         o = old[i]
+        if loaded_at and o.get("done") and (o.get("at") or "") > loaded_at and not done and not note:
+            new.append(o)   # recorded after this page was opened (e.g. a reminder just sent): keep it
+            continue
         if done and not o.get("done"):
             entry = {"done": True, "at": now(), "by": actor(), "note": note}
             changes.append(f"follow-up {i + 1} recorded" + (f": {note}" if note else ""))
